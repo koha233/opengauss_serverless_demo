@@ -111,16 +111,16 @@ function make_gaussdb_kernel()
     [ -d "${BUILD_DIR}" ] && rm -rf ${BUILD_DIR}
     mkdir -p ${CMAKE_BUILD_DIR}
     cd ${CMAKE_BUILD_DIR}
-    cmake .. ${CMAKE_OPT}
+    cmake .. ${CMAKE_OPT} >> "$LOG_FILE" 2>&1
     if [ $? -ne 0 ]; then
         die "cmake failed."
     fi
     cpus_num=$(grep -w processor /proc/cpuinfo|wc -l)
-    make -sj ${cpus_num}
+    make -sj ${cpus_num} >> "$LOG_FILE" 2>&1
     if [ $? -ne 0 ]; then
         die "make failed."
     fi
-    make install -sj ${cpus_num}
+    make install -sj ${cpus_num} >> "$LOG_FILE" 2>&1
     if [ $? -ne 0 ]; then
         die "make install failed."
     fi

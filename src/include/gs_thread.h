@@ -154,6 +154,7 @@ typedef enum knl_thread_role {
     TOP_CONSUMER,
     DCF_WORKER,
     DMS_WORKER,
+    OPTIMIZER_LISTEN,
     SW_SENDER
 } knl_thread_role;
 

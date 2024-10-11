@@ -3441,6 +3441,11 @@ typedef struct knl_t_dms_auxiliary_context {
     volatile sig_atomic_t shutdown_requested;
 } knl_t_dms_auxiliary_context;
 
+typedef struct knl_t_optimizer_listen_context {
+    volatile sig_atomic_t got_SIGHUP;
+    volatile sig_atomic_t shutdown_requested;
+    int optimizer_listen_id;
+} knl_t_optimizerlisten_context;
 /*
  * in_progress_list is a stack of ongoing RelationBuildDesc() calls.  CREATE
  * INDEX CONCURRENTLY makes catalog changes under ShareUpdateExclusiveLock.
@@ -3590,6 +3595,7 @@ typedef struct knl_thrd_context {
     knl_t_statement_context statement_cxt;
     knl_t_streaming_context streaming_cxt;
     knl_t_csnmin_sync_context csnminsync_cxt;
+    knl_t_optimizerlisten_context optimizerlisten_cxt;
 #ifdef ENABLE_MOT
     knl_t_mot_context mot_cxt;
 #endif

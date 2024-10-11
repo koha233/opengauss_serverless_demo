@@ -5,7 +5,7 @@
 #
 # ---------------------------------------------------------------------------------------
 
-subdir = src/gausskernel/optimizer/plan_proto
+subdir = src/gausskernel/optimizer/planproto
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
