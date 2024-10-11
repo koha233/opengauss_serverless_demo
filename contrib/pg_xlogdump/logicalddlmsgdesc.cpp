@@ -1,1 +1,1 @@
-../../src/gausskernel/storage/access/rmgrdesc/logicalddlmsgdesc.cpp
+/home/zhy/opengauss/openGauss-server/./src/gausskernel/storage/access/rmgrdesc/logicalddlmsgdesc.cpp

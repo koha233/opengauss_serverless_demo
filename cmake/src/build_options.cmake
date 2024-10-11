@@ -174,7 +174,7 @@ elseif(${WAL_SEGSIZE} GREATER_EQUAL 512)
 else()
     message(FATAL_ERROR "error: Invalid WAL segment size. Allowed values are 1,2,4,8,16,32,64,128,256,512.")
 endif()
-
+message(STATUS "LD_LIBRARY_PATH: $ENV{LD_LIBRARY_PATH}")
 # libraries need secure options during compling
 set(LIB_SECURE_OPTIONS -fPIC -fno-common -fstack-protector-strong)
 # libraries need link options during linking

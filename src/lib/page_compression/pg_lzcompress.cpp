@@ -1,1 +1,1 @@
-../../../src/common/backend/utils/adt/pg_lzcompress.cpp
+/home/zhy/opengauss/openGauss-server/./src/common/backend/utils/adt/pg_lzcompress.cpp

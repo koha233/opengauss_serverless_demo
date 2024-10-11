@@ -1,1 +1,1 @@
-../../../src/lib/cm_common/cm_errcodes.h
+/home/zhy/opengauss/openGauss-server/src/lib/cm_common/cm_errcodes.h

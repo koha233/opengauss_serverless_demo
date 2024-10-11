@@ -95,12 +95,18 @@ set(MASSTREE_HOME ${DEPENDENCY_PATH}/masstree/${LIB_UNIFIED_SUPPORT})
 set(LCOV_HOME ${BUILDTOOLS_PATH}/gcc${GCC_VERSION_LIT}/gcc/lib/gcc/${HOST_TUPLE})
 set(GCC_LIB_PATH $ENV{GCC_INSTALL_HOME})
 set(MEMCHECK_LIB_PATH $ENV{GCC_INSTALL_HOME}/lib64/)
+set(PROTOBUF_HOME ${DEPENDENCY_PATH}/protobuf)
 if("${GCC_LIB_PATH}" STREQUAL "")
     set(GCC_LIB_PATH ${BUILDTOOLS_PATH}/gcc${GCC_VERSION_LIT}/gcc)
     set(MEMCHECK_HOME ${DEPENDENCY_PATH}/memcheck/${MEMCHECK_BUILD_TYPE})
     set(MEMCHECK_LIB_PATH ${MEMCHECK_HOME}/gcc${GCC_VERSION}/lib/)
 endif()
-
+#############################################################################
+# protobuf
+#############################################################################
+set(PROTOBUF_INCLUDE_PATH ${PROTOBUF_HOME}/include)
+set(PROTOBUF_LIB_PATH ${PROTOBUF_HOME}/lib)
+set(PROTOBUF_BIN_PATH ${PROTOBUF_HOME}/bin)
 #############################################################################
 # lcov
 #############################################################################

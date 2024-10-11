@@ -337,6 +337,7 @@ include_directories(
     ${PROJECT_SRC_DIR}/gausskernel/cbb/communication/libcomm_utils
     ${PROJECT_SRC_DIR}/include/iprange
     ${PROJECT_SRC_DIR}/gausskernel/storage/replication
+    ${PROTOBUF_INCLUDE_PATH}
 )
 
 if(NOT "${ENABLE_LITE_MODE}" STREQUAL "ON")
