@@ -4807,7 +4807,7 @@ static PlannedStmt* _readPlannedStmt(void)
     }
     READ_INT_FIELD(num_nodes);
 
-    if (t_thrd.proc->workingVersionNum < 92097 || local_node->num_streams > 0 || IS_SPQ_RUNNING) {
+    if (IS_PGXC_COORDINATOR && (t_thrd.proc->workingVersionNum < 92097 || local_node->num_streams > 0 || IS_SPQ_RUNNING)) {
 	    local_node->nodesDefinition = (NodeDefinition*)palloc0(sizeof(NodeDefinition) * local_node->num_nodes);
 	    for (int i = 0; i < local_node->num_nodes; i++) {
 	        READ_OID_FIELD(nodesDefinition[i].nodeoid);

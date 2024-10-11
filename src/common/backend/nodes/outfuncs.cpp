@@ -579,7 +579,7 @@ static void _outPlannedStmt(StringInfo str, PlannedStmt* node)
     WRITE_INT_FIELD(gather_count);
     WRITE_INT_FIELD(num_nodes);
 
-    if (t_thrd.proc->workingVersionNum < 92097 || node->num_streams > 0 || IS_SPQ_RUNNING) {
+    if (IS_PGXC_COORDINATOR && (t_thrd.proc->workingVersionNum < 92097 || node->num_streams > 0 || IS_SPQ_RUNNING)) {
 	    for (int i = 0; i < node->num_nodes; i++) {
 	        /* Write the field name only one time and just append the value of each field */
 	        appendStringInfo(str, " :nodesDefinition[%d]", i);
@@ -1876,6 +1876,13 @@ static void _outAgg(StringInfo str, Agg* node)
     WRITE_GRPOP_FIELD(grpOperators, numCols);
 #ifndef ENABLE_MULTIPLE_NODES
     if (!IS_SPQ_RUNNING && t_thrd.proc->workingVersionNum >= CHARACTER_SET_VERSION_NUM) {
+        // fix:https://gitee.com/opengauss/openGauss-server/pulls/3502/files
+        if (node->grp_collations == NULL && node->numCols > 0) {
+            node->grp_collations = (unsigned int*)palloc(sizeof(unsigned int) * node->numCols);
+            for (int i = 0; i < node->numCols; i++) {
+                node->grp_collations[i] = InvalidOid;
+            }
+        }
         WRITE_GRPOP_FIELD(grp_collations, numCols);
     }
 #endif
