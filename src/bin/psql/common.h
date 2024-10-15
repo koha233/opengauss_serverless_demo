@@ -97,7 +97,7 @@ extern void EmptyRetryErrcodesList(ErrCodes& list);
 extern bool IsQueryNeedRetry(const char* sqlstate);
 extern void ResetQueryRetryController();
 extern bool QueryRetryController(const char* query);
-extern bool SendQuery(const char* query, bool is_print = true, bool print_error = true);
+extern bool SendQuery(const char* query, bool is_print = true, bool print_error = true, bool is_user_sql = false);
 extern bool MakeCopyWorker(const char* query, int nclients);
 extern DBFormatType GetDatabaseType();
 

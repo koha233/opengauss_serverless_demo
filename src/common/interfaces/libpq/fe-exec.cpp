@@ -1374,6 +1374,76 @@ int PQsendQueryWithPlan(PGconn *conn, const char *query, bool is_plan)
     return 1;
 }
 
+int PQsendQueryWithUserSql(PGconn *conn, const char *query)
+{
+    if (!PQsendQueryStart(conn))
+        return 0;
+
+    if (query == NULL) {
+        printfPQExpBuffer(&conn->errorMessage, libpq_gettext("command string is a null pointer\n"));
+        return 0;
+    }
+
+#ifdef HAVE_CE
+    StatementData statementData(conn, query);
+    if (conn->client_logic->enable_client_encryption) {
+        if (!conn->client_logic->disable_once) {
+            bool clientLogicRet = Processor::run_pre_query(&statementData);
+            if (!clientLogicRet)
+                return 0;
+            query = statementData.params.adjusted_query;
+        } else {
+            conn->client_logic->disable_once = false;
+        }
+    } else {
+        char *temp_query = del_blanks(const_cast<char *>(query), strlen(query));
+        const char *global_setting_str = "createclientmasterkey";
+        const char *column_setting_str = "createcolumnencryptionkey";
+        const char *client_logic_str = "encryptedwith";
+        if (temp_query != NULL && ((strcasestr(temp_query, global_setting_str) != NULL) ||
+                                   (strcasestr(temp_query, column_setting_str) != NULL) ||
+                                   (strcasestr(temp_query, client_logic_str) != NULL))) {
+            free(temp_query);
+            temp_query = NULL;
+            printfPQExpBuffer(
+                &conn->errorMessage,
+                libpq_gettext("ERROR(CLIENT): disable client-encryption feature, please use -C to enable it.\n"));
+            return 0;
+        }
+        if (temp_query != NULL) {
+            free(temp_query);
+            temp_query = NULL;
+        }
+    }
+#endif
+        /* construct the outgoing Query message */
+        if (pqPutMsgStart('x', false, conn) < 0 || pqPuts(query, conn) < 0 || pqPutMsgEnd(conn) < 0) {
+            pqHandleSendFailure(conn);
+            return 0;
+        }
+    /* remember we are using simple query protocol */
+    conn->queryclass = PGQUERY_SIMPLE;
+
+    /* and remember the query text too, if possible */
+    /* if insufficient memory, last_query just winds up NULL */
+    if (conn->last_query != NULL)
+        free(conn->last_query);
+    conn->last_query = strdup(query);
+
+    /*
+     * Give the data a push.  In nonblock mode, don't complain if we're unable
+     * to send it all; PQgetResult() will do any additional flushing needed.
+     */
+    if (pqFlush(conn) < 0) {
+        pqHandleSendFailure(conn);
+        return 0;
+    }
+
+    /* OK, it's launched! */
+    conn->asyncStatus = PGASYNC_BUSY;
+    return 1;
+}
+
 /*
  * PQsendQueryPoolerStatelessReuse use only in pooler stateless reuse mode.
  *	 Submit a query, but don't wait for it to finish
@@ -2280,6 +2350,16 @@ PGresult *PQexecWithPlan(PGconn *conn, const char *query, bool is_plan)
     }
     return PQexecFinish(conn);
 }
+
+PGresult *PQexecWithUserSql(PGconn *conn, const char *query)
+{
+    if (!PQexecStart(conn))
+        return NULL;
+    if (!PQsendQueryWithUserSql(conn, query))
+        return NULL;
+    return PQexecFinish(conn);
+}
+
 
 
 /*

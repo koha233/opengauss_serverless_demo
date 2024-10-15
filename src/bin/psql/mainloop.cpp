@@ -573,7 +573,7 @@ int MainLoop(FILE* source, char* querystring)
                         }
                     }
 #endif
-                    success = SendQuery(query_buf->data);
+                    success = SendQuery(query_buf->data, true, true, true);
 
                     // Query fail, if need retry, invoke QueryRetryController().
                     //

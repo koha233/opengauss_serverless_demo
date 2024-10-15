@@ -1138,7 +1138,7 @@ bool GetPrintResult(PGresult** results, bool is_explain, bool is_print, const ch
  *
  * Returns true if the query executed successfully, false otherwise.
  */
-bool SendQuery(const char* query, bool is_print, bool print_error)
+bool SendQuery(const char* query, bool is_print, bool print_error, bool is_user_sql)
 {
     PGresult* results = NULL;
     PGTransactionStatusType transaction_status;
@@ -1231,7 +1231,10 @@ bool SendQuery(const char* query, bool is_print, bool print_error)
         is_explain = is_explain_command(query);
 
         if (!is_explain){
-            if(query[0]=='('){
+            if(is_user_sql){
+                results = PQexecWithUserSql(pset.db, query);
+            }
+            else if(query[0] == '('){
                 results = PQexecWithPlan(pset.db, query, true);
             }
             else{
