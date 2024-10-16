@@ -1345,7 +1345,7 @@ int PQsendQueryWithPlan(PGconn *conn, const char *query, bool is_plan)
         }
     } else {
         /* construct the outgoing Query message */
-        if (pqPutMsgStart('Q', false, conn) < 0 || pqPuts(query, conn) < 0 || pqPutMsgEnd(conn) < 0) {
+        if (pqPutMsgStart('x', false, conn) < 0 || pqPuts(query, conn) < 0 || pqPutMsgEnd(conn) < 0) {
             pqHandleSendFailure(conn);
             return 0;
         }

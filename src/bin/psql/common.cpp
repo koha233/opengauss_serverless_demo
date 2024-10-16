@@ -1241,7 +1241,9 @@ bool SendQuery(const char* query, bool is_print, bool print_error, bool is_user_
                 results = PQexec(pset.db, query);
             }
         }
-
+        else if (!PQsendQueryWithUserSql(pset.db, query)){
+            results = NULL;
+        }
         if (is_explain) {
             OK = GetPrintResult(&results, is_explain, is_print, query, print_error);
 #ifdef HAVE_CE            
