@@ -577,6 +577,7 @@ int SocketBackend(StringInfo inBuf)
         case 'u': /* AUTONOMOUS_TRANSACTION simple query */
         case 'Q': /* simple query */
         case 'O': /* to reset openGauss thread in pooler stateless reuse mode */
+        case 'x':
         case 'Z': /* simple plan  */
         case 'h': /* hybrid message query */
         case 'Y': /* plan with params */
