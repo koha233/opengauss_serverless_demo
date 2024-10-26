@@ -1166,7 +1166,7 @@ void ExplainOnePlan(
     }
 
     /* for explain plan: after explained all nodes */
-    if (es->plan && es->planinfo != NULL) {
+    if (es->plan && es->planinfo != NULL) { 
         es->planinfo->m_planTableData->set_plan_table_ids(queryDesc->plannedstmt->queryId, es);
 
         /* insert all nodes` tuple into table. */
@@ -1285,6 +1285,9 @@ void ExplainOnePlan(
                     long spacePeakKb = (es->planinfo->m_query_summary->m_size + 1023) / 1024;
                     appendStringInfo(es->planinfo->m_query_summary->info_str, "Total network : %ldkB\n", spacePeakKb);
                 }
+                if (MEMORY_TRACKING_QUERY_PEAK)
+                    appendStringInfo(es->str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
+                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024));
                 es->planinfo->m_query_summary->m_size = 0;
 
                 /* show auto-analyze time */

@@ -69,6 +69,8 @@
 #include "utils/elog.h"
 #include "tcop/dest.h"
 #include "og_record_time.h"
+#include <vector>
+#include <string>
 
 #define TSRANK_WEIGHTS_LEN    4
 
@@ -3004,6 +3006,38 @@ typedef struct knl_u_ndp_context {
     char *crl_path;
 } knl_u_ndp_context;
 
+typedef struct knl_plan_info_context{
+    int query_id;
+    int plan_id;
+    int dop;
+    std::string encoding;
+    std::string operator_type;
+    std::string strategy;
+    double execution_time;
+    int estimate_rows;
+    int actural_rows;
+    int64 peak_mem;
+} knl_plan_info_context;
+
+typedef struct knl_query_info_context{
+    int query_id;
+    std::string query_string;
+    int dop;
+    double execution_time;
+    double estimate_exec_time;
+    int64 peak_mem;
+    int estimate_query_mem;
+    int estimate_work_mem;
+    double io_time;
+    double cpu_time;
+    int scan_rows;
+    int operator_num;
+    int join_num;
+    int agg_num;
+    bool is_user_sql;
+    std::vector<knl_plan_info_context> Plans;
+} knl_query_info_context;
+
 typedef struct knl_session_context {
     volatile knl_session_status status;
     /* used for threadworker, elem in m_readySessionList */
@@ -3157,6 +3191,8 @@ typedef struct knl_session_context {
 
     /* standby write. */
     knl_u_libsw_context libsw_cxt;
+    knl_query_info_context query_info_cxt;
+    
 
 } knl_session_context;
 
