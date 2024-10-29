@@ -2839,7 +2839,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         }
         plantree_list = pg_plan_queries(querytree_list, CURSOR_OPT_SPQ_OK, NULL);
         if (query_info->is_user_sql) {
-            query_info->query_string = query_string;
+            //query_info->query_string = query_string;
             query_info->dop = u_sess->opt_cxt.query_dop;
         }
 
@@ -2964,6 +2964,8 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         /*
          * Start the portal.  No parameters here.
          */
+        instr_time exec_starttime;
+        INSTR_TIME_SET_CURRENT(exec_starttime);
         PortalStart(portal, NULL, 0, InvalidSnapshot);
 
         /*
@@ -3009,8 +3011,11 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         (void)PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, completionTag);
 
         (*receiver->rDestroy)(receiver);
-
+        if(portal->queryDesc != NULL){
+            PlanState *ps = portal->queryDesc->planstate;
+        }
         PortalDrop(portal, false);
+        query_info->execution_time = elapsed_time(&exec_starttime);
 
         CleanHotkeyCandidates(true);
 
