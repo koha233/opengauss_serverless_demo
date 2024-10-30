@@ -1285,10 +1285,6 @@ void ExplainOnePlan(
                     long spacePeakKb = (es->planinfo->m_query_summary->m_size + 1023) / 1024;
                     appendStringInfo(es->planinfo->m_query_summary->info_str, "Total network : %ldkB\n", spacePeakKb);
                 }
-                if (MEMORY_TRACKING_QUERY_PEAK)
-                    appendStringInfo(es->str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
-                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024));
-                es->planinfo->m_query_summary->m_size = 0;
 
                 /* show auto-analyze time */
                 if (u_sess->analyze_cxt.autoanalyze_timeinfo && u_sess->analyze_cxt.autoanalyze_timeinfo->len > 0) {
@@ -1305,8 +1301,10 @@ void ExplainOnePlan(
                     u_sess->instr_cxt.plan_size);
 
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Query Id: %lu\n", u_sess->debug_query_id);
-                appendStringInfo(
-                    es->planinfo->m_query_summary->info_str, "Total runtime: %.3f ms\n", 1000.0 * totaltime);
+                if (MEMORY_TRACKING_QUERY_PEAK)
+                    appendStringInfo(es->str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
+                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024));
+                es->planinfo->m_query_summary->m_size = 0;
             }
         } else
             ExplainPropertyFloat("Total Runtime", 1000.0 * totaltime, 3, es);

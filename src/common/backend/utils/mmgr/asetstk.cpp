@@ -361,7 +361,7 @@ void* StackMemoryAllocator::AllocSetAlloc(MemoryContext context, Size align, Siz
 
 #ifdef MEMORY_CONTEXT_CHECKING
     /* track the detail allocation information */
-    MemoryTrackingDetailInfo(context, size, size, file, line);
+    // MemoryTrackingDetailInfo(context, size, size, file, line);
 #endif
 
     /*
