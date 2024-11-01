@@ -87,29 +87,28 @@ THR_LOCAL bool PTFastQueryShippingStore = true;
 THR_LOCAL bool IsExplainPlanStmt = false;
 THR_LOCAL bool IsExplainPlanSelectForUpdateStmt = false;
 
-/* Hook for plugins to get control in explain_get_index_name() */               
+/* Hook for plugins to get control in explain_get_index_name() */
 THR_LOCAL explain_get_index_name_hook_type explain_get_index_name_hook = NULL;
 
 extern TrackDesc trackdesc[];
 extern sortMessage sortmessage[];
-extern DestReceiver* CreateDestReceiver(CommandDest dest);
+extern DestReceiver *CreateDestReceiver(CommandDest dest);
 
 /* Array to record plan table column names, type, etc */
 static const PlanTableEntry plan_table_cols[] = {{"id", PLANID, INT4OID, ANAL_OPT},
-    {"operation", PLAN, TEXTOID, ANAL_OPT},
-    {"A-time", ACTUAL_TIME, TEXTOID, ANAL_OPT},
-    {"P-time", PREDICT_TIME, TEXTOID, PRED_OPT_TIME},
-    {"A-rows", ACTUAL_ROWS, FLOAT8OID, ANAL_OPT},
-    {"P-rows", PREDICT_ROWS, FLOAT8OID, PRED_OPT_ROW},
-    {"E-rows", ESTIMATE_ROWS, FLOAT8OID, COST_OPT},
-    {"E-distinct", ESTIMATE_DISTINCT, TEXTOID, VERBOSE_OPT},
-    {"Peak Memory", ACTUAL_MEMORY, TEXTOID, ANAL_OPT},
-    {"P-memory", PREDICT_MEMORY, TEXTOID, PRED_OPT_MEM},
-    {"E-memory", ESTIMATE_MEMORY, TEXTOID, COST_OPT},
-    {"A-width", ACTUAL_WIDTH, TEXTOID, ANAL_OPT},
-    {"E-width", ESTIMATE_WIDTH, INT4OID, COST_OPT},
-    {"E-costs", ESTIMATE_COSTS, TEXTOID, COST_OPT}
-};
+                                                 {"operation", PLAN, TEXTOID, ANAL_OPT},
+                                                 {"A-time", ACTUAL_TIME, TEXTOID, ANAL_OPT},
+                                                 {"P-time", PREDICT_TIME, TEXTOID, PRED_OPT_TIME},
+                                                 {"A-rows", ACTUAL_ROWS, FLOAT8OID, ANAL_OPT},
+                                                 {"P-rows", PREDICT_ROWS, FLOAT8OID, PRED_OPT_ROW},
+                                                 {"E-rows", ESTIMATE_ROWS, FLOAT8OID, COST_OPT},
+                                                 {"E-distinct", ESTIMATE_DISTINCT, TEXTOID, VERBOSE_OPT},
+                                                 {"Peak Memory", ACTUAL_MEMORY, TEXTOID, ANAL_OPT},
+                                                 {"P-memory", PREDICT_MEMORY, TEXTOID, PRED_OPT_MEM},
+                                                 {"E-memory", ESTIMATE_MEMORY, TEXTOID, COST_OPT},
+                                                 {"A-width", ACTUAL_WIDTH, TEXTOID, ANAL_OPT},
+                                                 {"E-width", ESTIMATE_WIDTH, INT4OID, COST_OPT},
+                                                 {"E-costs", ESTIMATE_COSTS, TEXTOID, COST_OPT}};
 #define NUM_VER_COLS 1
 #define NUM_ANALYZE_COLS 4
 #define NUM_COST_COLS 4
@@ -126,30 +125,30 @@ static const PlanTableEntry plan_table_cols[] = {{"id", PLANID, INT4OID, ANAL_OP
 #define FILTER_INFORMATIONAL_CONSTRAINT_FLAG "Filter(Informational Constraint Optimization)"
 #define FILTER_FLAG "Filter"
 
-static void ExplainOneQuery(
-     Query* query, IntoClause* into, ExplainState* es, const char* queryString, DestReceiver *dest, ParamListInfo params);
-static void report_triggers(ResultRelInfo* rInfo, bool show_relname, ExplainState* es);
+static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es, const char *queryString,
+                            DestReceiver *dest, ParamListInfo params);
+static void report_triggers(ResultRelInfo *rInfo, bool show_relname, ExplainState *es);
 template <bool is_pretty>
-static void ExplainNode(
-    PlanState* planstate, List* ancestors, const char* relationship, const char* plan_name, ExplainState* es);
+static void ExplainNode(PlanState *planstate, List *ancestors, const char *relationship, const char *plan_name,
+                        ExplainState *es);
 
-static void CalculateProcessedRows(
-    PlanState* planstate, int idx, int smpIdx, const uint64* innerRows, const uint64* outterRows, uint64* processedrows);
+static void CalculateProcessedRows(PlanState *planstate, int idx, int smpIdx, const uint64 *innerRows,
+                                   const uint64 *outterRows, uint64 *processedrows);
 
-static void show_plan_execnodes(PlanState* planstate, ExplainState* es);
-static void show_plan_tlist(PlanState* planstate, List* ancestors, ExplainState* es);
-static bool ContainRlsQualInRteWalker(Node* node, void* unused_info);
-static void show_expression(
-    Node* node, const char* qlabel, PlanState* planstate, List* ancestors, bool useprefix, ExplainState* es);
-static void show_qual(
-    List* qual, const char* qlabel, PlanState* planstate, List* ancestors, bool useprefix, ExplainState* es);
+static void show_plan_execnodes(PlanState *planstate, ExplainState *es);
+static void show_plan_tlist(PlanState *planstate, List *ancestors, ExplainState *es);
+static bool ContainRlsQualInRteWalker(Node *node, void *unused_info);
+static void show_expression(Node *node, const char *qlabel, PlanState *planstate, List *ancestors, bool useprefix,
+                            ExplainState *es);
+static void show_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, bool useprefix,
+                      ExplainState *es);
 static void show_scan_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, ExplainState *es,
-    bool show_prefix = false);
-static void show_skew_optimization(const PlanState* planstate, ExplainState* es);
+                           bool show_prefix = false);
+static void show_skew_optimization(const PlanState *planstate, ExplainState *es);
 template <bool generate>
-static void show_bloomfilter(Plan* plan, PlanState* planstate, List* ancestors, ExplainState* es);
+static void show_bloomfilter(Plan *plan, PlanState *planstate, List *ancestors, ExplainState *es);
 template <bool generate>
-static void show_bloomfilter_number(const List* filterNumList, ExplainState* es);
+static void show_bloomfilter_number(const List *filterNumList, ExplainState *es);
 /**
  * @Description: Show pushdown quals in the flag identifier.
  * @in planstate: Keep the current state of the plan node.
@@ -158,131 +157,134 @@ static void show_bloomfilter_number(const List* filterNumList, ExplainState* es)
  * @in es: A ExplainState struct.
  * @return None.
  */
-static void show_pushdown_qual(PlanState* planstate, List* ancestors, ExplainState* es, const char* identifier);
-static void show_upper_qual(List* qual, const char* qlabel, PlanState* planstate, List* ancestors, ExplainState* es);
-static void show_groupby_keys(AggState* aggstate, List* ancestors, ExplainState* es);
-static void show_sort_keys(SortState* sortstate, List* ancestors, ExplainState* es);
-static void show_merge_append_keys(MergeAppendState* mstate, List* ancestors, ExplainState* es);
-static void show_merge_sort_keys(PlanState* state, List* ancestors, ExplainState* es);
-static void show_startwith_pseudo_entries(PlanState* state, List* ancestors, ExplainState* es);
-static void show_sort_info(SortState* sortstate, ExplainState* es);
+static void show_pushdown_qual(PlanState *planstate, List *ancestors, ExplainState *es, const char *identifier);
+static void show_upper_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, ExplainState *es);
+static void show_groupby_keys(AggState *aggstate, List *ancestors, ExplainState *es);
+static void show_sort_keys(SortState *sortstate, List *ancestors, ExplainState *es);
+static void show_merge_append_keys(MergeAppendState *mstate, List *ancestors, ExplainState *es);
+static void show_merge_sort_keys(PlanState *state, List *ancestors, ExplainState *es);
+static void show_startwith_pseudo_entries(PlanState *state, List *ancestors, ExplainState *es);
+static void show_sort_info(SortState *sortstate, ExplainState *es);
 static void show_sort_group_info(SortGroupState *state, ExplainState *es);
-static void show_hash_info(HashState* hashstate, ExplainState* es);
-static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es);
+static void show_hash_info(HashState *hashstate, ExplainState *es);
+static void show_vechash_info(VecHashJoinState *hashstate, ExplainState *es);
 static void show_tidbitmap_info(BitmapHeapScanState *planstate, ExplainState *es);
-static void show_instrumentation_count(const char* qlabel, int which, const PlanState* planstate, ExplainState* es);
-static void show_removed_rows(int which, const PlanState* planstate, int idx, int smpIdx, int* removeRows);
+static void show_instrumentation_count(const char *qlabel, int which, const PlanState *planstate, ExplainState *es);
+static void show_removed_rows(int which, const PlanState *planstate, int idx, int smpIdx, int *removeRows);
 static int check_integer_overflow(double var);
-static void show_foreignscan_info(ForeignScanState* fsstate, ExplainState* es);
-static void show_detail_storage_info_text(Instrumentation* instr, StringInfo instr_info);
-static void show_detail_storage_info_json(Instrumentation* instr, StringInfo instr_info, ExplainState* es);
-static void show_storage_filter_info(PlanState* planstate, ExplainState* es);
-static void show_llvm_info(const PlanState* planstate, ExplainState* es);
-static void show_modifytable_merge_info(const PlanState* planstate, ExplainState* es);
-static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es);
-static void show_startwith_dfx(StartWithOpState* rustate, ExplainState* es);
-static const char* explain_get_index_name(Oid indexId);
-static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, ExplainState* es);
-static void ExplainScanTarget(Scan* plan, ExplainState* es);
-static void ExplainModifyTarget(ModifyTable* plan, ExplainState* es);
-static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multiTarget = false);
-static void show_on_duplicate_info(ModifyTableState* mtstate, ExplainState* es, List* ancestors);
+static void show_foreignscan_info(ForeignScanState *fsstate, ExplainState *es);
+static void show_detail_storage_info_text(Instrumentation *instr, StringInfo instr_info);
+static void show_detail_storage_info_json(Instrumentation *instr, StringInfo instr_info, ExplainState *es);
+static void show_storage_filter_info(PlanState *planstate, ExplainState *es);
+static void show_llvm_info(const PlanState *planstate, ExplainState *es);
+static void show_modifytable_merge_info(const PlanState *planstate, ExplainState *es);
+static void show_recursive_info(RecursiveUnionState *rustate, ExplainState *es);
+static void show_startwith_dfx(StartWithOpState *rustate, ExplainState *es);
+static const char *explain_get_index_name(Oid indexId);
+static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, ExplainState *es);
+static void ExplainScanTarget(Scan *plan, ExplainState *es);
+static void ExplainModifyTarget(ModifyTable *plan, ExplainState *es);
+static void ExplainTargetRel(Plan *plan, Index rti, ExplainState *es, bool multiTarget = false);
+static bool GetTargetRel(Plan *plan, Index rti, List *rtable, std::string &table_name, bool multiTarget = false);
+static void show_on_duplicate_info(ModifyTableState *mtstate, ExplainState *es, List *ancestors);
 #ifndef PGXC
-static void show_modifytable_info(ModifyTableState* mtstate, ExplainState* es);
+static void show_modifytable_info(ModifyTableState *mtstate, ExplainState *es);
 #endif /* PGXC */
-static void ExplainMemberNodes(const List* plans, PlanState** planstates, List* ancestors, ExplainState* es);
-static void ExplainSubPlans(List* plans, List* ancestors, const char* relationship, ExplainState* es);
-static void ExplainProperty(const char* qlabel, const char* value, bool numeric, ExplainState* es);
-static void ExplainOpenGroup(const char* objtype, const char* labelname, bool labeled, ExplainState* es);
-static void ExplainCloseGroup(const char* objtype, const char* labelname, bool labeled, ExplainState* es);
-static void ExplainDummyGroup(const char* objtype, const char* labelname, ExplainState* es);
+static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans, PlanState **planstates, List *ancestors);
+static void ExplainMemberNodes(const List *plans, PlanState **planstates, List *ancestors, ExplainState *es);
+static void ExplainSubPlans(List *plans, List *ancestors, const char *relationship, ExplainState *es);
+static void ExplainProperty(const char *qlabel, const char *value, bool numeric, ExplainState *es);
+static void ExplainOpenGroup(const char *objtype, const char *labelname, bool labeled, ExplainState *es);
+static void ExplainCloseGroup(const char *objtype, const char *labelname, bool labeled, ExplainState *es);
+static void ExplainDummyGroup(const char *objtype, const char *labelname, ExplainState *es);
 #ifdef PGXC
-static void ExplainExecNodes(const ExecNodes* en, ExplainState* es);
-static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* ancestors, ExplainState* es);
+static void ExplainExecNodes(const ExecNodes *en, ExplainState *es);
+static void ExplainRemoteQuery(RemoteQuery *plan, PlanState *planstate, List *ancestors, ExplainState *es);
 #endif
-static void ExplainXMLTag(const char* tagname, unsigned int flags, ExplainState* es);
-static void ExplainJSONLineEnding(ExplainState* es);
-static void ExplainYAMLLineStarting(ExplainState* es);
-static void escape_yaml(StringInfo buf, const char* str);
+static void ExplainXMLTag(const char *tagname, unsigned int flags, ExplainState *es);
+static void ExplainJSONLineEnding(ExplainState *es);
+static void ExplainYAMLLineStarting(ExplainState *es);
+static void escape_yaml(StringInfo buf, const char *str);
 
 template <bool is_detail>
-static void show_time(ExplainState* es, const Instrumentation* instrument, int idx);
-static void show_cpu(ExplainState* es, const Instrumentation* instrument, double innerCycles, double outerCycles, int nodeIdx,
-    int smpIdx, uint64 proRows);
-static void show_detail_cpu(ExplainState* es, PlanState* planstate);
-static void show_datanode_buffers(ExplainState* es, PlanState* planstate);
-static void show_buffers(ExplainState* es, StringInfo infostr, const Instrumentation* instrument, bool is_datanode,
-    int nodeIdx, int smpIdx, const char* nodename);
-static void show_datanode_time(ExplainState* es, PlanState* planstate);
-static void ShowStreamRunNodeInfo(Stream* stream, ExplainState* es);
-static void ShowRunNodeInfo(const ExecNodes* en, ExplainState* es, const char* qlabel);
+static void show_time(ExplainState *es, const Instrumentation *instrument, int idx);
+static void show_cpu(ExplainState *es, const Instrumentation *instrument, double innerCycles, double outerCycles,
+                     int nodeIdx, int smpIdx, uint64 proRows);
+static void show_detail_cpu(ExplainState *es, PlanState *planstate);
+static void show_datanode_buffers(ExplainState *es, PlanState *planstate);
+static void show_buffers(ExplainState *es, StringInfo infostr, const Instrumentation *instrument, bool is_datanode,
+                         int nodeIdx, int smpIdx, const char *nodename);
+static void show_datanode_time(ExplainState *es, PlanState *planstate);
+static void ShowStreamRunNodeInfo(Stream *stream, ExplainState *es);
+static void ShowRunNodeInfo(const ExecNodes *en, ExplainState *es, const char *qlabel);
 template <bool is_detail>
 static void show_datanode_hash_info(ExplainState *es, int nbatch, int nbuckets_original, int nbatch_original,
                                     int nbuckets, long spacePeakKb);
-static void ShowRoughCheckInfo(ExplainState* es, Instrumentation* instrument, int nodeIdx, int smpIdx);
-static void show_hashAgg_info(AggState* hashaggstate, ExplainState* es);
-static void ExplainPrettyList(List* data, ExplainState* es);
-static void show_pretty_time(ExplainState* es, Instrumentation* instrument, char* node_name, int nodeIdx, int smpIdx,
-    int dop, bool executed = true);
-static void show_analyze_buffers(ExplainState* es, const PlanState* planstate, StringInfo infostr, int nodeNum);
+static void ShowRoughCheckInfo(ExplainState *es, Instrumentation *instrument, int nodeIdx, int smpIdx);
+static void show_hashAgg_info(AggState *hashaggstate, ExplainState *es);
+static void ExplainPrettyList(List *data, ExplainState *es);
+static void show_pretty_time(ExplainState *es, Instrumentation *instrument, char *node_name, int nodeIdx, int smpIdx,
+                             int dop, bool executed = true);
+static void show_analyze_buffers(ExplainState *es, const PlanState *planstate, StringInfo infostr, int nodeNum);
 
 inline static void show_cpu_info(StringInfo infostr, double incCycles, double exCycles, uint64 proRows);
 
-static void show_track_time_info(ExplainState* es);
+static void show_track_time_info(ExplainState *es);
 template <bool datanode>
-static void show_child_cpu_cycles_and_rows(PlanState* planstate, int idx, int smpIdx, double* outerCycles,
-    double* innerCycles, uint64* outterRows, uint64* innerRows);
+static void show_child_cpu_cycles_and_rows(PlanState *planstate, int idx, int smpIdx, double *outerCycles,
+                                           double *innerCycles, uint64 *outterRows, uint64 *innerRows);
 template <bool datanode>
-static void CalCPUMemberNode(const List* plans, PlanState** planstates, int idx, int smpIdx, double* Cycles);
+static void CalCPUMemberNode(const List *plans, PlanState **planstates, int idx, int smpIdx, double *Cycles);
 
-static void showStreamnetwork(Stream* stream, ExplainState* es);
+static void showStreamnetwork(Stream *stream, ExplainState *es);
 static int get_digit(int value);
 template <bool datanode>
-static void get_oper_time(ExplainState* es, PlanState* planstate, const Instrumentation* instr, int nodeIdx, int smpIdx);
-static void show_peak_memory(ExplainState* es, int plan_size);
-static bool get_execute_mode(const ExplainState* es, int idx);
-static void show_setop_info(SetOpState* setopstate, ExplainState* es);
-static void show_grouping_sets(PlanState* planstate, Agg* agg, List* ancestors, ExplainState* es);
-static void show_group_keys(GroupState* gstate, List* ancestors, ExplainState* es);
-static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int nkeys, const AttrNumber* keycols,
-    const Oid* sortOperators, const Oid* collations, const bool* nullsFirst, List* ancestors, ExplainState* es);
-static void show_sortorder_options(StringInfo buf, const Node* sortexpr, Oid sortOperator, Oid collation, bool nullsFirst);
-static void show_grouping_set_keys(PlanState* planstate, Agg* aggnode, Sort* sortnode, List* context, bool useprefix,
-    List* ancestors, ExplainState* es);
-static void show_dn_executor_time(ExplainState* es, int plan_node_id, ExecutorTime stage);
-static void show_stream_send_time(ExplainState* es, const PlanState* planstate);
-static void append_datanode_name(ExplainState* es, char* node_name, int dop, int j);
-static void show_tablesample(Plan* plan, PlanState* planstate, List* ancestors, ExplainState* es);
-void insert_obsscaninfo(
-    uint64 queryid, const char* rel_name, int64 file_count, double scan_data_size, double total_time, int format);
-extern List* get_str_targetlist(List* fdw_private);
-static void show_wlm_explain_name(ExplainState* es, const char* plan_name, const char* pname, int plan_node_id);
+static void get_oper_time(ExplainState *es, PlanState *planstate, const Instrumentation *instr, int nodeIdx,
+                          int smpIdx);
+static void show_peak_memory(ExplainState *es, int plan_size);
+static bool get_execute_mode(const ExplainState *es, int idx);
+static void show_setop_info(SetOpState *setopstate, ExplainState *es);
+static void show_grouping_sets(PlanState *planstate, Agg *agg, List *ancestors, ExplainState *es);
+static void show_group_keys(GroupState *gstate, List *ancestors, ExplainState *es);
+static void show_sort_group_keys(PlanState *planstate, const char *qlabel, int nkeys, const AttrNumber *keycols,
+                                 const Oid *sortOperators, const Oid *collations, const bool *nullsFirst,
+                                 List *ancestors, ExplainState *es);
+static void show_sortorder_options(StringInfo buf, const Node *sortexpr, Oid sortOperator, Oid collation,
+                                   bool nullsFirst);
+static void show_grouping_set_keys(PlanState *planstate, Agg *aggnode, Sort *sortnode, List *context, bool useprefix,
+                                   List *ancestors, ExplainState *es);
+static void show_dn_executor_time(ExplainState *es, int plan_node_id, ExecutorTime stage);
+static void show_stream_send_time(ExplainState *es, const PlanState *planstate);
+static void append_datanode_name(ExplainState *es, char *node_name, int dop, int j);
+static void show_tablesample(Plan *plan, PlanState *planstate, List *ancestors, ExplainState *es);
+void insert_obsscaninfo(uint64 queryid, const char *rel_name, int64 file_count, double scan_data_size,
+                        double total_time, int format);
+extern List *get_str_targetlist(List *fdw_private);
+static void show_wlm_explain_name(ExplainState *es, const char *plan_name, const char *pname, int plan_node_id);
 extern unsigned char pg_toupper(unsigned char ch);
-static char* set_strtoupper(const char* str, uint32 len);
+static char *set_strtoupper(const char *str, uint32 len);
 #ifdef ENABLE_MULTIPLE_NODES
-static bool show_scan_distributekey(const Plan* plan)
+static bool show_scan_distributekey(const Plan *plan)
 {
-    return (
-        IsA(plan, CStoreScan) || IsA(plan, CStoreIndexScan) || IsA(plan, CStoreIndexHeapScan) || IsA(plan, SeqScan) ||
-        IsA(plan, IndexScan) || IsA(plan, IndexOnlyScan) || IsA(plan, CteScan) ||
-        IsA(plan, ForeignScan) || IsA(plan, VecForeignScan) || IsA(plan, BitmapHeapScan) || IsA(plan, TsStoreScan)
-    );
+    return (IsA(plan, CStoreScan) || IsA(plan, CStoreIndexScan) || IsA(plan, CStoreIndexHeapScan) ||
+            IsA(plan, SeqScan) || IsA(plan, IndexScan) || IsA(plan, IndexOnlyScan) || IsA(plan, CteScan) ||
+            IsA(plan, ForeignScan) || IsA(plan, VecForeignScan) || IsA(plan, BitmapHeapScan) || IsA(plan, TsStoreScan));
 }
-#endif   /* ENABLE_MULTIPLE_NODES */
+#endif /* ENABLE_MULTIPLE_NODES */
 static void show_unique_check_info(PlanState *planstate, ExplainState *es);
-static void show_ndpplugin_statistic(ExplainState *es, PlanState* planstate, StringInfo str, bool is_pretty);
+static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, StringInfo str, bool is_pretty);
 
 /*
  * ExplainQuery -
  *	  execute an EXPLAIN command
  */
-void ExplainQuery(
-    ExplainStmt* stmt, const char* queryString, ParamListInfo params, DestReceiver* dest, char* completionTag)
+void ExplainQuery(ExplainStmt *stmt, const char *queryString, ParamListInfo params, DestReceiver *dest,
+                  char *completionTag)
 {
     ExplainState es;
-    TupOutputState* tstate = NULL;
-    List* rewritten = NIL;
-    ListCell* lc = NULL;
+    TupOutputState *tstate = NULL;
+    List *rewritten = NIL;
+    ListCell *lc = NULL;
     bool timing_set = false;
 
     /* Initialize ExplainState. */
@@ -290,7 +292,7 @@ void ExplainQuery(
 
     /* Parse options list. */
     foreach (lc, stmt->options) {
-        DefElem* opt = (DefElem*)lfirst(lc);
+        DefElem *opt = (DefElem *)lfirst(lc);
 
         /*
          * For explain plan stmt:
@@ -307,15 +309,13 @@ void ExplainQuery(
 #ifdef ENABLE_MULTIPLE_NODES
                 /* We do not support execute explain plan on pgxc datanode or single node. */
                 if (IS_PGXC_DATANODE || IS_SINGLE_NODE)
-                    ereport(ERROR,
-                        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                            errmsg("EXPLAIN PLAN does not support on datanode or single node.")));
+                    ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                                    errmsg("EXPLAIN PLAN does not support on datanode or single node.")));
 #endif
                 /* If explain option is "PLAN", it must only has one option. */
                 if (list_length(stmt->options) != 1)
-                    ereport(ERROR,
-                        (errcode(ERRCODE_SYNTAX_ERROR),
-                            errmsg("EXPLAIN option 'PLAN' can not work with other options.")));
+                    ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+                                    errmsg("EXPLAIN option 'PLAN' can not work with other options.")));
 
                 /* For explain plan stmt: we mark it to generate plan node id for cte case. */
                 IsExplainPlanStmt = true;
@@ -325,7 +325,7 @@ void ExplainQuery(
                  * However, select for update can only run when enable_fast_query_shipping = on,
                  * so we should set IsExplainPlanSelectForUpdateStmt = true to make enable_fast_query_shipping work.
                  */
-                if (IsA(stmt->query, Query) && ((Query*)stmt->query)->hasForUpdate)
+                if (IsA(stmt->query, Query) && ((Query *)stmt->query)->hasForUpdate)
                     IsExplainPlanSelectForUpdateStmt = true;
 
                 /* Trun off fast_query_shipping to collect more plan info. */
@@ -336,7 +336,7 @@ void ExplainQuery(
                 if (stmt->statement == NULL)
                     es.statement_id = NULL;
                 else {
-                    Value v = ((A_Const*)stmt->statement)->val;
+                    Value v = ((A_Const *)stmt->statement)->val;
                     if (v.type == T_Null)
                         es.statement_id = NULL;
                     else
@@ -376,7 +376,7 @@ void ExplainQuery(
         else if (pg_strcasecmp(opt->defname, "performance") == 0)
             es.performance = defGetBoolean(opt);
         else if (strcmp(opt->defname, "format") == 0) {
-            char* p = defGetString(opt);
+            char *p = defGetString(opt);
 
             if (strcmp(p, "text") == 0)
                 es.format = EXPLAIN_FORMAT_TEXT;
@@ -387,13 +387,12 @@ void ExplainQuery(
             else if (strcmp(p, "yaml") == 0)
                 es.format = EXPLAIN_FORMAT_YAML;
             else
-                ereport(ERROR,
-                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                        errmsg("unrecognized value for EXPLAIN option \"%s\": \"%s\"", opt->defname, p)));
-#ifndef ENABLE_MULTIPLE_NODES 
+                ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                                errmsg("unrecognized value for EXPLAIN option \"%s\": \"%s\"", opt->defname, p)));
+#ifndef ENABLE_MULTIPLE_NODES
         } else if (strcmp(opt->defname, "predictor") == 0) {
             es.opt_model_name = defGetString(opt);
-#endif       
+#endif
         } else
             ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("unrecognized EXPLAIN option \"%s\"", opt->defname)));
     }
@@ -461,7 +460,7 @@ void ExplainQuery(
             t_thrd.explain_cxt.explain_perf_mode = EXPLAIN_NORMAL;
         }
     } else {
-        ListCell* l = NULL;
+        ListCell *l = NULL;
 
         /* Specially, not explain LightCN when explain analyze */
         t_thrd.explain_cxt.explain_light_proxy = IS_PGXC_COORDINATOR && !IsConnFromCoord() &&
@@ -489,7 +488,7 @@ void ExplainQuery(
 
         /* Explain every plan */
         foreach (l, rewritten) {
-            Query* query_tree = (Query*)lfirst(l);
+            Query *query_tree = (Query *)lfirst(l);
 
             /*
              * We need to revert this query_tree, so that ExplainOneQuery can get correct
@@ -549,7 +548,7 @@ void ExplainQuery(
 /*
  * Initialize ExplainState.
  */
-void ExplainInitState(ExplainState* es)
+void ExplainInitState(ExplainState *es)
 {
     /* Set default options. */
     errno_t rc = memset_s(es, sizeof(ExplainState), 0, sizeof(ExplainState));
@@ -582,21 +581,21 @@ void ExplainInitState(ExplainState* es)
  * ExplainResultDesc -
  *	  construct the result tupledesc for an EXPLAIN
  */
-TupleDesc ExplainResultDesc(ExplainStmt* stmt)
+TupleDesc ExplainResultDesc(ExplainStmt *stmt)
 {
     TupleDesc tupdesc = NULL;
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     Oid result_type = TEXTOID;
-    char* attributeName = NULL;
+    char *attributeName = NULL;
     char RandomPlanName[NAMEDATALEN] = {0};
     bool explain_plan = false; /* for explain plan stmt */
 
     /* Check for XML format option */
     foreach (lc, stmt->options) {
-        DefElem* opt = (DefElem*)lfirst(lc);
+        DefElem *opt = (DefElem *)lfirst(lc);
 
         if (strcmp(opt->defname, "format") == 0) {
-            char* p = defGetString(opt);
+            char *p = defGetString(opt);
 
             if (strcmp(p, "xml") == 0)
                 result_type = XMLOID;
@@ -608,7 +607,7 @@ TupleDesc ExplainResultDesc(ExplainStmt* stmt)
         } else if (strcmp(opt->defname, "plan") == 0 && defGetBoolean(opt) && list_length(stmt->options) == 1) {
             /* For explain plan */
             explain_plan = true;
-        }          
+        }
     }
 
     if (!explain_plan) {
@@ -618,12 +617,12 @@ TupleDesc ExplainResultDesc(ExplainStmt* stmt)
         /* If current plan is set as random plan, explain desc should show random seed value */
         if (u_sess->attr.attr_sql.plan_mode_seed != OPTIMIZE_PLAN) {
             int rc = 0;
-            rc = snprintf_s(
-                RandomPlanName, NAMEDATALEN, NAMEDATALEN - 1, "QUERY PLAN (RANDOM seed %u)", get_inital_plan_seed());
+            rc = snprintf_s(RandomPlanName, NAMEDATALEN, NAMEDATALEN - 1, "QUERY PLAN (RANDOM seed %u)",
+                            get_inital_plan_seed());
             securec_check_ss(rc, "\0", "\0");
         }
         attributeName =
-            ((OPTIMIZE_PLAN == u_sess->attr.attr_sql.plan_mode_seed) ? (char*)"QUERY PLAN" : RandomPlanName);
+            ((OPTIMIZE_PLAN == u_sess->attr.attr_sql.plan_mode_seed) ? (char *)"QUERY PLAN" : RandomPlanName);
 
         TupleDescInitEntry(tupdesc, (AttrNumber)1, attributeName, result_type, -1, 0);
     }
@@ -637,14 +636,14 @@ TupleDesc ExplainResultDesc(ExplainStmt* stmt)
  *
  * "into" is NULL unless we are explaining the contents of a CreateTableAsStmt.
  */
-static void ExplainOneQuery(
-    Query* query, IntoClause* into, ExplainState* es, const char* queryString, DestReceiver *dest, ParamListInfo params)
+static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es, const char *queryString,
+                            DestReceiver *dest, ParamListInfo params)
 {
     /* only use t_thrd.explain_cxt.explain_light_proxy once */
     if (t_thrd.explain_cxt.explain_light_proxy) {
-        ExecNodes* single_exec_node = lightProxy::checkLightQuery(query);
-        if (single_exec_node == NULL || list_length(single_exec_node->nodeList) +
-            list_length(single_exec_node->primarynodelist) != 1) {
+        ExecNodes *single_exec_node = lightProxy::checkLightQuery(query);
+        if (single_exec_node == NULL ||
+            list_length(single_exec_node->nodeList) + list_length(single_exec_node->primarynodelist) != 1) {
             t_thrd.explain_cxt.explain_light_proxy = false;
         }
         CleanHotkeyCandidates(true);
@@ -654,14 +653,14 @@ static void ExplainOneQuery(
     /* planner will not cope with utility statements */
     if (query->commandType == CMD_UTILITY) {
         if (IsA(query->utilityStmt, CreateTableAsStmt)) {
-            CreateTableAsStmt* ctas = (CreateTableAsStmt*)query->utilityStmt;
-            List* rewritten = NIL;
+            CreateTableAsStmt *ctas = (CreateTableAsStmt *)query->utilityStmt;
+            List *rewritten = NIL;
 
             // INSERT INTO statement needs target table to be created first,
             // so we just support EXPLAIN ANALYZE.
             //
             if (!es->analyze) {
-                const char* stmt = ctas->is_select_into ? "SELECT INTO" : "CREATE TABLE AS SELECT";
+                const char *stmt = ctas->is_select_into ? "SELECT INTO" : "CREATE TABLE AS SELECT";
 
                 ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("EXPLAIN %s requires ANALYZE", stmt)));
             }
@@ -672,18 +671,17 @@ static void ExplainOneQuery(
             //
             rewritten = QueryRewriteCTAS(query);
 
-            ExplainOneQuery((Query*)linitial(rewritten), ctas->into, es, queryString, dest, params);
+            ExplainOneQuery((Query *)linitial(rewritten), ctas->into, es, queryString, dest, params);
 
             return;
-        }
-        else if (IsA(query->utilityStmt, CreateModelStmt)) {
-            CreateModelStmt* cm = (CreateModelStmt*) query->utilityStmt;
+        } else if (IsA(query->utilityStmt, CreateModelStmt)) {
+            CreateModelStmt *cm = (CreateModelStmt *)query->utilityStmt;
 
             /*
              * Create the tuple receiver object and insert hyperp it will need
              */
-            DestReceiverTrainModel* dest_train_model = NULL;
-            dest_train_model = (DestReceiverTrainModel*) CreateDestReceiver(DestTrainModel);
+            DestReceiverTrainModel *dest_train_model = NULL;
+            dest_train_model = (DestReceiverTrainModel *)CreateDestReceiver(DestTrainModel);
             configure_dest_receiver_train_model(dest_train_model, CurrentMemoryContext, (AlgorithmML)cm->algorithm,
                                                 cm->model, queryString, true);
 
@@ -693,7 +691,6 @@ static void ExplainOneQuery(
 
             ExplainOnePlan(plan, into, es, queryString, dest, params);
             return;
-
         }
 
         ExplainOneUtility(query->utilityStmt, into, es, queryString, params);
@@ -705,14 +702,13 @@ static void ExplainOneQuery(
      * So we can use explain to print the plan, but can not use explain analyze to execute the query.
      */
     if (query->utilityStmt && IsA(query->utilityStmt, DeclareCursorStmt)) {
-        const char* s = es->performance ? "PERFORMANCE" : "ANALYZE";
+        const char *s = es->performance ? "PERFORMANCE" : "ANALYZE";
         if (es->analyze)
-            ereport(ERROR,
-                (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                    errmsg("EXPLAIN %s is not supported when declaring a cursor.", s),
-                    errdetail("Query is not actually executed when declaring a cursor.")));
+            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                            errmsg("EXPLAIN %s is not supported when declaring a cursor.", s),
+                            errdetail("Query is not actually executed when declaring a cursor.")));
     }
-    PlannedStmt* plan = NULL;
+    PlannedStmt *plan = NULL;
 
     /*
      * plan the query
@@ -755,14 +751,14 @@ static void ExplainOneQuery(
  * This is exported because it's called back from prepare.c in the
  * EXPLAIN EXECUTE case.
  */
-void ExplainOneUtility(
-    Node* utilityStmt, IntoClause* into, ExplainState* es, const char* queryString, ParamListInfo params)
+void ExplainOneUtility(Node *utilityStmt, IntoClause *into, ExplainState *es, const char *queryString,
+                       ParamListInfo params)
 {
     if (utilityStmt == NULL)
         return;
 
     if (IsA(utilityStmt, ExecuteStmt))
-        ExplainExecuteQuery((ExecuteStmt*)utilityStmt, into, es, queryString, params);
+        ExplainExecuteQuery((ExecuteStmt *)utilityStmt, into, es, queryString, params);
     else if (IsA(utilityStmt, NotifyStmt)) {
         if (es->format == EXPLAIN_FORMAT_TEXT)
             appendStringInfoString(es->str, "NOTIFY\n");
@@ -781,13 +777,13 @@ void ExplainOneUtility(
  * @in estate - estate information
  * @out - void
  */
-static void ExecRemoteprocessPlan(EState* estate)
+static void ExecRemoteprocessPlan(EState *estate)
 {
 #ifdef ENABLE_MULTIPLE_NODES
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     foreach (lc, estate->es_remotequerystates) {
-        PlanState* ps = (PlanState*)lfirst(lc);
-        ExecEndRemoteQuery((RemoteQueryState*)ps, true);
+        PlanState *ps = (PlanState *)lfirst(lc);
+        ExecEndRemoteQuery((RemoteQueryState *)ps, true);
     }
 #else
     if (u_sess->stream_cxt.global_obj) {
@@ -802,20 +798,20 @@ static void ExecRemoteprocessPlan(EState* estate)
  * @in qd - queryDesc information
  * @out - void
  */
-static void GetNodeList(QueryDesc* qd)
+static void GetNodeList(QueryDesc *qd)
 {
-    ListCell* lc = NULL;
-    ListCell* lc2 = NULL;
-    RemoteQuery* rq = NULL;
+    ListCell *lc = NULL;
+    ListCell *lc2 = NULL;
+    RemoteQuery *rq = NULL;
     foreach (lc, u_sess->exec_cxt.remotequery_list) {
-        rq = (RemoteQuery*)lfirst(lc);
+        rq = (RemoteQuery *)lfirst(lc);
 
         /*
          * when execute pbe query, rq->exec_nodes->nodeList could be NIL,
          * so we should get nodeLists through FindExecNodesInPBE function.
          */
         foreach (lc2, qd->estate->es_remotequerystates) {
-            RemoteQueryState* rqs = (RemoteQueryState*)lfirst(lc2);
+            RemoteQueryState *rqs = (RemoteQueryState *)lfirst(lc2);
 
             /* find node_lists and fill in exec_nodes */
             FindExecNodesInPBE(rqs, rq->exec_nodes, EXEC_ON_DATANODES);
@@ -832,10 +828,10 @@ static void GetNodeList(QueryDesc* qd)
  * @in nodeoid - DN nodeoid
  * @out - void
  */
-void ReorganizeSqlStatement(
-    ExplainState* es, RemoteQuery* rq, const char* queryString, const char* explain_sql, Oid nodeoid)
+void ReorganizeSqlStatement(ExplainState *es, RemoteQuery *rq, const char *queryString, const char *explain_sql,
+                            Oid nodeoid)
 {
-    const char* perf_mode = NULL;
+    const char *perf_mode = NULL;
 
     switch (u_sess->attr.attr_sql.guc_explain_perf_mode) {
         case EXPLAIN_NORMAL:
@@ -851,12 +847,12 @@ void ReorganizeSqlStatement(
             perf_mode = "run";
             break;
         default:
-            ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("invalid value for parameter explain_perf_mode.")));
+            ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                            errmsg("invalid value for parameter explain_perf_mode.")));
             break;
     }
 
-    const char* format = NULL;
+    const char *format = NULL;
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
             format = "text";
@@ -871,25 +867,20 @@ void ReorganizeSqlStatement(
             format = "yaml";
             break;
         default:
-            ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("unrecognized value for EXPLAIN option \"format\".")));
+            ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                            errmsg("unrecognized value for EXPLAIN option \"format\".")));
             break;
     }
 
-    const char* verbose = es->verbose ? "on" : "off";
-    const char* costs = es->costs ? "on" : "off";
-    const char* num_nodes = es->num_nodes ? "on" : "off";
+    const char *verbose = es->verbose ? "on" : "off";
+    const char *costs = es->costs ? "on" : "off";
+    const char *num_nodes = es->num_nodes ? "on" : "off";
 
     StringInfo prefix = makeStringInfo();
     appendStringInfo(prefix,
-        "set explain_perf_mode=%s; "
-        "explain (format %s, verbose %s, costs %s, nodes off, num_nodes %s)",
-        perf_mode,
-        format,
-        verbose,
-        costs,
-        num_nodes);
+                     "set explain_perf_mode=%s; "
+                     "explain (format %s, verbose %s, costs %s, nodes off, num_nodes %s)",
+                     perf_mode, format, verbose, costs, num_nodes);
     if (es->isexplain_execute && (!CheckPrepared(rq, nodeoid) || ENABLE_GPC)) {
         /*
          * When execute firstly explain pbe statement in dfx, we should send
@@ -915,14 +906,14 @@ void ReorganizeSqlStatement(
  * @in queryString - prepared sql statement in pbe or simple queryString
  * @out - void
  */
-static void ExecFQSQueryinDn(ExplainState* es, const char* queryString)
+static void ExecFQSQueryinDn(ExplainState *es, const char *queryString)
 {
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     foreach (lc, u_sess->exec_cxt.remotequery_list) {
-        RemoteQuery* rq = (RemoteQuery*)lfirst(lc);
+        RemoteQuery *rq = (RemoteQuery *)lfirst(lc);
 
         int dnnum = 0;
-        StringInfo* rs = SendExplainToDNs(es, rq, &dnnum, queryString);
+        StringInfo *rs = SendExplainToDNs(es, rq, &dnnum, queryString);
         for (int i = 0; i < dnnum; i++) {
             appendStringInfo(es->str, "%s\n", rs[i]->data);
         }
@@ -946,15 +937,10 @@ static void ExecFQSQueryinDn(ExplainState* es, const char* queryString)
  * EXPLAIN EXECUTE case, and because an index advisor plugin would need
  * to call it.
  */
-void ExplainOnePlan(
-    PlannedStmt* plannedstmt,
-    IntoClause* into,
-    ExplainState* es,
-    const char* queryString,
-    DestReceiver *dest,
-    ParamListInfo params)
+void ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es, const char *queryString,
+                    DestReceiver *dest, ParamListInfo params)
 {
-    QueryDesc* queryDesc = NULL;
+    QueryDesc *queryDesc = NULL;
     instr_time starttime;
     instr_time exec_starttime;    /* executor init start time */
     double exec_totaltime = 0;    /* executor init total time */
@@ -986,8 +972,8 @@ void ExplainOnePlan(
     UpdateActiveSnapshotCommandId();
 
     /* Create a QueryDesc for the query */
-    queryDesc = CreateQueryDesc(
-        plannedstmt, queryString, GetActiveSnapshot(), InvalidSnapshot, dest, params, instrument_option);
+    queryDesc = CreateQueryDesc(plannedstmt, queryString, GetActiveSnapshot(), InvalidSnapshot, dest, params,
+                                instrument_option);
 
     queryDesc->plannedstmt->instrument_option = instrument_option;
 
@@ -1000,22 +986,21 @@ void ExplainOnePlan(
         eflags |= GetIntoRelEFlags(into);
 
 #ifdef STREAMPLAN
-    /*
-     * u_sess->exec_cxt.under_stream_runtime is set to true in ExecInitRemoteQuery() if
-     * node->is_simple is true. ExecInitRemoteQuery() will be called during
-     * calling ExecutorStart(queryDesc, eflags).
-     * light performance is changed to allocate streaminstrumentation firstly,
-     * and than calling ExecutorStart for ExecInitNode in CN.
-     */
-    /*  only stream plan can use  u_sess->instr_cxt.global_instr to collect executor info */
+        /*
+         * u_sess->exec_cxt.under_stream_runtime is set to true in ExecInitRemoteQuery() if
+         * node->is_simple is true. ExecInitRemoteQuery() will be called during
+         * calling ExecutorStart(queryDesc, eflags).
+         * light performance is changed to allocate streaminstrumentation firstly,
+         * and than calling ExecutorStart for ExecInitNode in CN.
+         */
+        /*  only stream plan can use  u_sess->instr_cxt.global_instr to collect executor info */
 #ifdef ENABLE_MULTIPLE_NODES
     if (IS_PGXC_COORDINATOR &&
 #else
     if ((IS_SPQ_COORDINATOR || StreamTopConsumerAmI()) &&
 #endif
-        queryDesc->plannedstmt->is_stream_plan == true &&
-        check_stream_support() && instrument_option != 0 && u_sess->instr_cxt.global_instr == NULL &&
-        queryDesc->plannedstmt->num_nodes != 0) {
+        queryDesc->plannedstmt->is_stream_plan == true && check_stream_support() && instrument_option != 0 &&
+        u_sess->instr_cxt.global_instr == NULL && queryDesc->plannedstmt->num_nodes != 0) {
         int dop = queryDesc->plannedstmt->query_dop;
 #ifdef USE_SPQ
         MemoryContext oldContext = MemoryContextSwitchTo(u_sess->spq_cxt.spq_worker_context);
@@ -1062,9 +1047,9 @@ void ExplainOnePlan(
      * 2. For EXPLAIN PLAN, we still collect plan info.
      */
     if ((t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && IS_STREAM_PLAN &&
-            u_sess->exec_cxt.under_stream_runtime) ||
+         u_sess->exec_cxt.under_stream_runtime) ||
         es->plan) {
-        es->planinfo = (PlanInformation*)palloc0(sizeof(PlanInformation));
+        es->planinfo = (PlanInformation *)palloc0(sizeof(PlanInformation));
         es->planinfo->init(es, plannedstmt->num_plannodes, plannedstmt->num_nodes, (plannedstmt->query_mem[0] > 0));
     } else
         t_thrd.explain_cxt.explain_perf_mode = EXPLAIN_NORMAL;
@@ -1113,7 +1098,7 @@ void ExplainOnePlan(
         /* SQL Self-Tuning : Analyze query plan issues based on runtime info when query execution is finished */
         if (u_sess->exec_cxt.need_track_resource &&
             u_sess->attr.attr_resource.resource_track_level == RESOURCE_TRACK_OPERATOR) {
-            List* issueResults = PlanAnalyzerOperator(queryDesc, queryDesc->planstate);
+            List *issueResults = PlanAnalyzerOperator(queryDesc, queryDesc->planstate);
 
             /* If plan issue is found, store it in sysview gs_wlm_session_history */
             if (issueResults != NIL) {
@@ -1133,16 +1118,16 @@ void ExplainOnePlan(
 #ifndef ENABLE_MULTIPLE_NODES
     SetNullPrediction(queryDesc->planstate);
     /* Call machine learning prediction routine for test */
-    if (es->opt_model_name != NULL && PredictorIsValid((const char*)es->opt_model_name)) {
-        char* file_name = PreModelPredict(queryDesc->planstate, queryDesc->plannedstmt);
-        ModelPredictForExplain(queryDesc->planstate, file_name, (const char*)es->opt_model_name);
+    if (es->opt_model_name != NULL && PredictorIsValid((const char *)es->opt_model_name)) {
+        char *file_name = PreModelPredict(queryDesc->planstate, queryDesc->plannedstmt);
+        ModelPredictForExplain(queryDesc->planstate, file_name, (const char *)es->opt_model_name);
     }
 #endif /* ENABLE_MULTIPLE_NODES */
 
     ExplainOpenGroup("Query", NULL, true, es);
 
-    if (IS_PGXC_DATANODE && u_sess->attr.attr_sql.enable_opfusion == true &&
-        es->format == EXPLAIN_FORMAT_TEXT && u_sess->attr.attr_sql.enable_hypo_index == false) {
+    if (IS_PGXC_DATANODE && u_sess->attr.attr_sql.enable_opfusion == true && es->format == EXPLAIN_FORMAT_TEXT &&
+        u_sess->attr.attr_sql.enable_hypo_index == false) {
         FusionType type = OpFusion::getFusionType(NULL, params, list_make1(queryDesc->plannedstmt));
         if (!es->is_explain_gplan)
             type = NOBYPASS_NO_CPLAN;
@@ -1150,7 +1135,7 @@ void ExplainOnePlan(
             appendStringInfo(es->str, "[Bypass]\n");
         } else if (u_sess->attr.attr_sql.opfusion_debug_mode == BYPASS_LOG) {
             appendStringInfo(es->str, "[No Bypass]");
-            const char* bypass_reason = getBypassReason(type);
+            const char *bypass_reason = getBypassReason(type);
             appendStringInfo(es->str, "reason: %s.\n", bypass_reason);
         }
     }
@@ -1166,7 +1151,7 @@ void ExplainOnePlan(
     }
 
     /* for explain plan: after explained all nodes */
-    if (es->plan && es->planinfo != NULL) { 
+    if (es->plan && es->planinfo != NULL) {
         es->planinfo->m_planTableData->set_plan_table_ids(queryDesc->plannedstmt->queryId, es);
 
         /* insert all nodes` tuple into table. */
@@ -1188,12 +1173,12 @@ void ExplainOnePlan(
 
     /* Print info about runtime of triggers */
     if (es->analyze) {
-        ResultRelInfo* rInfo = NULL;
+        ResultRelInfo *rInfo = NULL;
         bool show_relname = false;
         int numrels = queryDesc->estate->es_num_result_relations;
-        List* targrels = queryDesc->estate->es_trig_target_relations;
+        List *targrels = queryDesc->estate->es_trig_target_relations;
         int nr;
-        ListCell* l = NULL;
+        ListCell *l = NULL;
 
         ExplainOpenGroup("Triggers", "Triggers", false, es);
 
@@ -1203,7 +1188,7 @@ void ExplainOnePlan(
             report_triggers(rInfo, show_relname, es);
 
         foreach (l, targrels) {
-            rInfo = (ResultRelInfo*)lfirst(l);
+            rInfo = (ResultRelInfo *)lfirst(l);
             report_triggers(rInfo, show_relname, es);
         }
 
@@ -1211,12 +1196,12 @@ void ExplainOnePlan(
     }
 
     /* Check plan was influenced by row level security or not, here need to skip remote dummy node */
-    if (range_table_walker(
-        plannedstmt->rtable, (bool (*)())ContainRlsQualInRteWalker, NULL, QTW_EXAMINE_RTES | QTW_IGNORE_DUMMY)) {
-        if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL 
-            && es->planinfo->m_detailInfo != NULL) {
+    if (range_table_walker(plannedstmt->rtable, (bool (*)())ContainRlsQualInRteWalker, NULL,
+                           QTW_EXAMINE_RTES | QTW_IGNORE_DUMMY)) {
+        if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL &&
+            es->planinfo->m_detailInfo != NULL) {
             appendStringInfo(es->planinfo->m_detailInfo->info_str,
-                "Notice: This query is influenced by row level security feature\n");
+                             "Notice: This query is influenced by row level security feature\n");
         }
         ExplainPropertyText("Notice", "This query is influenced by row level security feature", es);
     }
@@ -1261,11 +1246,10 @@ void ExplainOnePlan(
             if (t_thrd.explain_cxt.explain_perf_mode == EXPLAIN_NORMAL) {
                 if (MEMORY_TRACKING_QUERY_PEAK)
                     appendStringInfo(es->str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
-                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024));
+                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024));
                 else
                     appendStringInfo(es->str, "Total runtime: %.3f ms\n", 1000.0 * totaltime);
-            }
-            else if (es->planinfo != NULL && es->planinfo->m_query_summary) {
+            } else if (es->planinfo != NULL && es->planinfo->m_query_summary) {
 
                 const char *process_role = "Datanode";
                 if (IS_PGXC_COORDINATOR) {
@@ -1288,22 +1272,19 @@ void ExplainOnePlan(
 
                 /* show auto-analyze time */
                 if (u_sess->analyze_cxt.autoanalyze_timeinfo && u_sess->analyze_cxt.autoanalyze_timeinfo->len > 0) {
-                    appendStringInfo(es->planinfo->m_query_summary->info_str,
-                        "Autoanalyze runtime: %s\n",
-                        u_sess->analyze_cxt.autoanalyze_timeinfo->data);
+                    appendStringInfo(es->planinfo->m_query_summary->info_str, "Autoanalyze runtime: %s\n",
+                                     u_sess->analyze_cxt.autoanalyze_timeinfo->data);
                 }
 
-                appendStringInfo(es->planinfo->m_query_summary->info_str,
-                    "Planner runtime: %.3f ms\n",
-                    1000.0 * plannedstmt->plannertime);
-                appendStringInfo(es->planinfo->m_query_summary->info_str,
-                    "Plan size: %d byte\n",
-                    u_sess->instr_cxt.plan_size);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Planner runtime: %.3f ms\n",
+                                 1000.0 * plannedstmt->plannertime);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Plan size: %d byte\n",
+                                 u_sess->instr_cxt.plan_size);
 
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Query Id: %lu\n", u_sess->debug_query_id);
                 if (MEMORY_TRACKING_QUERY_PEAK)
                     appendStringInfo(es->str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
-                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024));
+                                     (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024));
                 es->planinfo->m_query_summary->m_size = 0;
             }
         } else
@@ -1328,7 +1309,7 @@ void ExplainOnePlan(
  *
  * NB: will not work on utility statements
  */
-void ExplainPrintPlan(ExplainState* es, QueryDesc* queryDesc)
+void ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
 {
     AssertEreport(queryDesc->plannedstmt != NULL, MOD_EXECUTOR, "unexpect null value");
     es->pstmt = queryDesc->plannedstmt;
@@ -1346,57 +1327,409 @@ void ExplainPrintPlan(ExplainState* es, QueryDesc* queryDesc)
         }
         if (es->pstmt->query_mem[0] != 0) {
             if (es->pstmt->assigned_query_mem[0] > 0)
-                appendStringInfo(es->planinfo->m_query_summary->info_str,
-                    "System available mem: %dKB\n",
-                    es->pstmt->assigned_query_mem[0]);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "System available mem: %dKB\n",
+                                 es->pstmt->assigned_query_mem[0]);
             if (es->pstmt->assigned_query_mem[1] > 0)
-                appendStringInfo(
-                    es->planinfo->m_query_summary->info_str, "Query Max mem: %dKB\n", es->pstmt->assigned_query_mem[1]);
-            appendStringInfo(
-                es->planinfo->m_query_summary->info_str, "Query estimated mem: %dKB\n", es->pstmt->query_mem[0]);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Query Max mem: %dKB\n",
+                                 es->pstmt->assigned_query_mem[1]);
+            appendStringInfo(es->planinfo->m_query_summary->info_str, "Query estimated mem: %dKB\n",
+                             es->pstmt->query_mem[0]);
         }
 
         if (es->pstmt->is_dynmaic_smp) {
             if (g_instance.wlm_cxt->dynamic_workload_inited) {
-                appendStringInfo(es->planinfo->m_query_summary->info_str,
-                    "Avail/Max core: %d/%d\n",
-                    es->pstmt->dynsmp_avail_cpu,
-                    es->pstmt->dynsmp_max_cpu);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Avail/Max core: %d/%d\n",
+                                 es->pstmt->dynsmp_avail_cpu, es->pstmt->dynsmp_max_cpu);
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Cpu util: %d\n", es->pstmt->dynsmp_cpu_util);
-                appendStringInfo(es->planinfo->m_query_summary->info_str,
-                    "Active statement: %d\n",
-                    es->pstmt->dynsmp_active_statement);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Active statement: %d\n",
+                                 es->pstmt->dynsmp_active_statement);
             } else {
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Avail/Max core: NA/NA\n");
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Cpu util: NA\n");
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Active statement: NA\n");
             }
 
-            appendStringInfo(es->planinfo->m_query_summary->info_str,
-                "Query estimated cpu: %.1lf\n",
-                es->pstmt->dynsmp_query_estimate_cpu_usge);
+            appendStringInfo(es->planinfo->m_query_summary->info_str, "Query estimated cpu: %.1lf\n",
+                             es->pstmt->dynsmp_query_estimate_cpu_usge);
 
-            appendStringInfo(
-                es->planinfo->m_query_summary->info_str, "Mem allowed dop: %d\n", es->pstmt->dynsmp_dop_mem_limit);
+            appendStringInfo(es->planinfo->m_query_summary->info_str, "Mem allowed dop: %d\n",
+                             es->pstmt->dynsmp_dop_mem_limit);
 
             if (es->pstmt->dynsmp_min_non_spill_dop == DYNMSP_ALREADY_SPILLED) {
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Min non-spill dop: already spilled\n");
             } else if (es->pstmt->dynsmp_min_non_spill_dop == DYNMSP_SPILL_IF_USE_HIGHER_DOP) {
-                appendStringInfo(
-                    es->planinfo->m_query_summary->info_str, "Min non-spill dop: spill if use higher dop\n");
-            } else {
                 appendStringInfo(es->planinfo->m_query_summary->info_str,
-                    "Min non-spill dop: %d\n",
-                    es->pstmt->dynsmp_min_non_spill_dop);
+                                 "Min non-spill dop: spill if use higher dop\n");
+            } else {
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Min non-spill dop: %d\n",
+                                 es->pstmt->dynsmp_min_non_spill_dop);
             }
 
-            appendStringInfo(
-                es->planinfo->m_query_summary->info_str, "Initial dop: %d\n", es->pstmt->dynsmp_plan_original_dop);
-            appendStringInfo(
-                es->planinfo->m_query_summary->info_str, "Final dop: %d\n", es->pstmt->dynsmp_plan_optimal_dop);
+            appendStringInfo(es->planinfo->m_query_summary->info_str, "Initial dop: %d\n",
+                             es->pstmt->dynsmp_plan_original_dop);
+            appendStringInfo(es->planinfo->m_query_summary->info_str, "Final dop: %d\n",
+                             es->pstmt->dynsmp_plan_optimal_dop);
         }
     } else
         ExplainNode<false>(queryDesc->planstate, NIL, NULL, NULL, es);
+}
+
+void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
+{
+    AssertEreport(queryDesc->plannedstmt != NULL, MOD_EXECUTOR, "unexpect null value");
+    query_info->operator_num = queryDesc->plannedstmt->num_plannodes;
+    query_info->query_id = queryDesc->plannedstmt->queryId;
+    const ListCell *lc = NULL;
+    foreach (lc, queryDesc->plannedstmt->rtable) {
+        RangeTblEntry *rte = (RangeTblEntry *)lfirst(lc);
+        char *table_name = get_rel_name(rte->relid);
+        if (table_name != NULL) {
+            query_info->table_names.push_back(table_name);
+        }
+    }
+    CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
+}
+
+void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
+                     const char *relationship, const char *plan_name)
+{
+    Plan *plan = planstate->plan;
+    char *pname = NULL; /* node type name for text output */
+    char *sname = NULL; /* node type name for non-text output */
+    char *strategy = NULL;
+    char *operation = NULL;
+    bool haschildren = false;
+    //int plan_node_id = plan->plan_node_id;
+    //int parentid = plan->parent_node_id;
+    //StringInfo tmpName = nullptr;
+
+    /* For plan_table column */
+    char *pt_operation = NULL;
+    char *pt_options = NULL;
+    knl_plan_info_context plan_info;
+    plan_info.actural_rows = -1;
+    plan_info.plan_id = -1;
+    plan_info.dop = 1;
+    plan_info.execution_time = 0;
+    plan_info.peak_mem = 0;
+    plan_info.estimate_costs = 0;
+    plan_info.estimate_rows =0;
+    plan_info.actural_rows = 0;
+    plan_info.query_id = query_info->query_id;
+    plan_info.io_time = 0;
+
+    /* Fetch plan node's plain text info */
+    GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
+    plan_info.operator_type = sname;
+    plan_info.strategy = strategy;
+    std::string table_name;
+
+    switch (nodeTag(plan)) {
+        case T_SeqScan:
+#ifdef USE_SPQ
+        case T_SpqSeqScan:
+        case T_SpqBitmapHeapScan:
+#endif
+        case T_CStoreScan:
+#ifdef ENABLE_MULTIPLE_NODES
+        case T_TsStoreScan:
+#endif /* ENABLE_MULTIPLE_NODES */
+        case T_BitmapHeapScan:
+        case T_CStoreIndexHeapScan:
+        case T_TidScan:
+        case T_SubqueryScan:
+        case T_VecSubqueryScan:
+        case T_FunctionScan:
+        case T_ValuesScan:
+        case T_CteScan:
+        case T_WorkTableScan:
+        case T_ForeignScan:
+        case T_VecForeignScan:
+        case T_ExtensiblePlan: {
+            auto relid = ((Scan *)plan)->scanrelid;
+            if (relid > 0) {
+                if (GetTargetRel(plan, relid, rtable, table_name, false)) {
+                    plan_info.table_names.push_back(table_name);
+                }
+            }
+        } break;
+        case T_IndexScan: {
+            if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
+                plan_info.table_names.push_back(table_name);
+            }
+        } break;
+#ifdef USE_SPQ
+        case T_SpqIndexOnlyScan:
+#endif
+        case T_IndexOnlyScan: {
+            if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
+                plan_info.table_names.push_back(table_name);
+            }
+        } break;
+        case T_BitmapIndexScan: {
+        } break;
+        case T_CStoreIndexScan: {
+            if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
+                plan_info.table_names.push_back(table_name);
+            }
+        } break;
+        case T_CStoreIndexCtidScan: {
+        } break;
+        case T_ModifyTable:
+        case T_VecModifyTable: {
+            ModifyTable *modifyplan = (ModifyTable *)plan;
+            bool multiTarget = (list_length((List *)linitial(modifyplan->resultRelations)) > 1);
+            Index rti = (Index)linitial_int((List *)linitial(modifyplan->resultRelations));
+            if (GetTargetRel(plan, rti, rtable, table_name, multiTarget)) {
+                plan_info.table_names.push_back(table_name);
+            }
+        } break;
+        case T_NestLoop:
+        case T_VecNestLoop:
+        case T_VecMergeJoin:
+        case T_MergeJoin:
+        case T_HashJoin:
+        case T_VecHashJoin:
+        case T_SetOp:
+        case T_VecSetOp:
+        case T_PartIterator:
+        case T_Append:
+        case T_VecAppend:
+        case T_RecursiveUnion:
+        default:
+            break;
+    }
+
+    // if (u_sess->attr.attr_sql.enable_stream_recursive && IsA(plan, Stream) && ((Stream *)plan)->stream_level > 0 &&
+    //     plan->recursive_union_plan_nodeid != 0) {
+    //     Stream *stream_plan = (Stream *)plan;
+
+    //     appendStringInfo(es->str, " stream_level:%d ", stream_plan->stream_level);
+    //     if (is_pretty)
+    //         appendStringInfo(tmpName, " stream_level:%d ", stream_plan->stream_level);
+    // }
+
+    plan_info.estimate_costs = plan->total_cost;
+    plan_info.estimate_rows = plan->plan_rows;
+    // if ((IsA(plan, HashJoin) || IsA(plan, VecHashJoin)) && es->verbose) {
+    //     char opdist[130] = "\0";
+    //     int rc = EOK;
+    //     rc = sprintf_s(opdist, sizeof(opdist), "%.0f, %.0f", plan->outerdistinct > 1 ? ceil(plan->outerdistinct)
+    //     : 1.0,
+    //                    plan->innerdistinct > 1 ? ceil(plan->innerdistinct) : 1.0);
+    //     securec_check_ss(rc, "\0", "\0");
+    //     es->planinfo->m_planInfo->put(ESTIMATE_DISTINCT, PointerGetDatum(cstring_to_text(opdist)));
+    // }
+    // es->planinfo->m_planInfo->put(ESTIMATE_WIDTH, plan->plan_width);
+
+    // if (queryDesc->plannedstmt->query_mem[0]>0) {
+    //     char memstr[50] = "\0";
+    //     if (plan->operatorMemKB[0] > 0) {
+    //         int rc = 0;
+    //         if (plan->operatorMemKB[0] < 1024)
+    //             rc = sprintf_s(memstr, sizeof(memstr), "%dKB", (int)plan->operatorMemKB[0]);
+    //         else {
+    //             if (plan->operatorMemKB[0] > MIN_OP_MEM && plan->operatorMaxMem > plan->operatorMemKB[0])
+    //                 rc = sprintf_s(memstr, sizeof(memstr), "%dMB(%dMB)", (int)plan->operatorMemKB[0] / 1024,
+    //                                (int)plan->operatorMaxMem / 1024);
+    //             else
+    //                 rc = sprintf_s(memstr, sizeof(memstr), "%dMB", (int)plan->operatorMemKB[0] / 1024);
+    //         }
+    //         securec_check_ss(rc, "\0", "\0");
+    //     }
+    // }
+
+    /*
+     * We have to forcibly clean up the instrumentation state because we
+     * haven't done ExecutorEnd yet.  This is pretty grotty ...
+     */
+    if (planstate->instrument) {
+        InstrEndLoop(planstate->instrument);
+        const double startup_sec = 1000.0 * planstate->instrument->startup;
+        const double total_sec = 1000.0 * planstate->instrument->total;
+        double rows = planstate->instrument->ntuples;
+        plan_info.actural_rows = rows;
+        plan_info.execution_time = total_sec - startup_sec;
+    }
+
+    // /* target list */
+    // if (es->verbose || es->plan)
+    //     show_plan_tlist(planstate, ancestors, es);
+
+    /* Show exec nodes of plan nodes when it's not a single installation group scenario */
+    // if (es->nodes && es->verbose && ng_enable_nodegroup_explain()) {
+    //     show_plan_execnodes(planstate, es);
+    // }
+    /* quals, sort keys, etc */
+    const BufferUsage *buf_usage = &planstate->instrument->bufusage;
+    plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
+    plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
+    /* if 'cpu' is specified, display the cpu cost */
+    // uint64 proRows = 0;
+    // double incCycles = 0.0;
+    // double exCycles = 0.0;
+    // double outerCycles = 0.0;
+    // double innerCycles = 0.0;
+    // uint64 outterRows = 0;
+    // uint64 innerRows = 0;
+
+    // Instrumentation *instr = NULL;
+    // const CPUUsage *cpu_usage = &planstate->instrument->cpuusage;
+
+    // show_child_cpu_cycles_and_rows<false>(planstate, 0, 0, &outerCycles, &innerCycles, &outterRows, &innerRows);
+
+    // incCycles = cpu_usage->m_cycles;
+    // exCycles = incCycles - outerCycles - innerCycles;
+
+    // proRows = (long)(planstate->instrument->ntuples);
+
+    // CalculateProcessedRows(planstate, 0, 0, &innerRows, &outterRows, &proRows);
+    // ExplainPropertyLong("Exclusive Cycles Per Row", proRows != 0 ? (long)(exCycles / proRows) : 0, es);
+    // ExplainPropertyLong("Exclusive Cycles", (long)exCycles, es);
+    // ExplainPropertyLong("Inclusive Cycles", (long)incCycles, es);
+    query_info->Plans.push_back(plan_info);
+
+runnext:
+
+    /* Get ready to display the child plans */
+    haschildren = planstate->initPlan || outerPlanState(planstate) || innerPlanState(planstate) ||
+                  IsA(plan, ModifyTable) || IsA(plan, VecModifyTable) || IsA(plan, Append) || IsA(plan, VecAppend) ||
+                  IsA(plan, MergeAppend) || IsA(plan, VecMergeAppend) || IsA(plan, BitmapAnd) || IsA(plan, BitmapOr) ||
+                  IsA(plan, SubqueryScan) || IsA(plan, VecSubqueryScan) ||
+                  (IsA(planstate, ExtensiblePlanState) && ((ExtensiblePlanState *)planstate)->extensible_ps != NIL) ||
+                  planstate->subPlan;
+    if (haschildren) {
+        /* Pass current PlanState as head of ancestors list for children */
+        ancestors = lcons(planstate, ancestors);
+    }
+
+    /* initPlan-s */
+    if (planstate->initPlan) {
+        ListCell *lst = NULL;
+        foreach (lst, planstate->initPlan) {
+            SubPlanState *sps = (SubPlanState *)lfirst(lst);
+            SubPlan *sp = (SubPlan *)sps->xprstate.expr;
+            if (sps->planstate == NULL)
+                continue;
+            if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
+                continue;
+            }
+            CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
+        }
+    }
+
+    /* Cte distributed support */
+    if (IS_STREAM_PLAN && IsA(plan, CteScan)) {
+        CteScanState *css = (CteScanState *)planstate;
+
+        if (css->cteplanstate) {
+            CollectPlanInfo(query_info, rtable, css->cteplanstate, ancestors, "CTE Sub", NULL);
+        }
+    }
+
+    /* lefttree */
+    if (outerPlanState(planstate)) {
+        CollectPlanInfo(query_info, rtable, outerPlanState(planstate), ancestors, "Outer", NULL);
+    }
+
+    /* righttree */
+    if (innerPlanState(planstate)) {
+        CollectPlanInfo(query_info, rtable, innerPlanState(planstate), ancestors, "Inner", NULL);
+    }
+
+    /* special child plans */
+    switch (nodeTag(plan)) {
+        case T_ModifyTable:
+        case T_VecModifyTable: {
+            CollectMemberNodes(query_info, rtable, ((ModifyTable *)plan)->plans,
+                               ((ModifyTableState *)planstate)->mt_plans, ancestors);
+        } break;
+        case T_VecAppend:
+        case T_Append: {
+            CollectMemberNodes(query_info, rtable, ((Append *)plan)->appendplans,
+                               ((AppendState *)planstate)->appendplans, ancestors);
+        } break;
+        case T_MergeAppend: {
+            CollectMemberNodes(query_info, rtable, ((MergeAppend *)plan)->mergeplans,
+                               ((MergeAppendState *)planstate)->mergeplans, ancestors);
+        } break;
+        case T_BitmapAnd: {
+            CollectMemberNodes(query_info, rtable, ((BitmapAnd *)plan)->bitmapplans,
+                               ((BitmapAndState *)planstate)->bitmapplans, ancestors);
+        } break;
+        case T_BitmapOr: {
+            CollectMemberNodes(query_info, rtable, ((BitmapOr *)plan)->bitmapplans,
+                               ((BitmapOrState *)planstate)->bitmapplans, ancestors);
+        } break;
+        case T_CStoreIndexAnd: {
+            CollectMemberNodes(query_info, rtable, ((CStoreIndexAnd *)plan)->bitmapplans,
+                               ((BitmapAndState *)planstate)->bitmapplans, ancestors);
+        } break;
+        case T_CStoreIndexOr: {
+            CollectMemberNodes(query_info, rtable, ((CStoreIndexOr *)plan)->bitmapplans,
+                               ((BitmapOrState *)planstate)->bitmapplans, ancestors);
+        } break;
+        case T_SubqueryScan:
+        case T_VecSubqueryScan: {
+            CollectPlanInfo(query_info, rtable, ((SubqueryScanState *)planstate)->subplan, ancestors, "Subquery", NULL);
+        } break;
+        case T_ExtensiblePlan: {
+            ListCell *cell = NULL;
+            ExtensiblePlanState *epplanstate = (ExtensiblePlanState *)planstate;
+            const char *label = (list_length(epplanstate->extensible_ps) != 1 ? "children" : "child");
+
+            foreach (cell, epplanstate->extensible_ps)
+                CollectPlanInfo(query_info, rtable, (PlanState *)lfirst(cell), ancestors, label, NULL);
+        } break;
+#ifdef USE_SPQ
+        case T_Sequence:
+            CollectMemberNodes(query_info, rtable, ((Sequence *)plan)->subplans, ((SequenceState *)planstate)->subplans,
+                               ancestors);
+            break;
+#endif
+        default:
+            break;
+    }
+
+    /* subPlan-s */
+    if (planstate->subPlan){
+        ListCell *lst = NULL;
+        foreach (lst, planstate->subPlan) {
+            SubPlanState *sps = (SubPlanState *)lfirst(lst);
+            SubPlan *sp = (SubPlan *)sps->xprstate.expr;
+            if (sps->planstate == NULL)
+                continue;
+            if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
+                continue;
+            }
+            CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
+        }
+    }
+
+    /* end of child plans */
+    if (haschildren) {
+        ancestors = list_delete_first(ancestors);
+    }
+
+    // /* Set info for explain plan. Note that we do not deal with query shipping except "explain plan for select for
+    //  * update". */
+    // /*
+    //  * 1.Handle the case for select for update.
+    //  * Step 1: Check if it's a select for update case.
+    //  */
+    // if (planstate->plan->plan_node_id == 0 && IsExplainPlanSelectForUpdateStmt) {
+    //     /* Step 2: Set operation for plan table. */
+    //     GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
+
+    //     /* Step 3: Set object_type for plan table. */
+    //     RangeTblEntry *rte = (RangeTblEntry *)llast(rtable);
+    //     char *objectname = rte->relname;
+    //     const char *object_type = "REMOTE_QUERY";
+
+    //     /* Step 4: Set projection for plan table. */
+    //     show_plan_tlist(planstate, ancestors, es);
+    // }
+
 }
 
 /*
@@ -1407,7 +1740,7 @@ void ExplainPrintPlan(ExplainState* es, QueryDesc* queryDesc)
  * initializing the output buffer es->str.
  *
  */
-void ExplainQueryText(ExplainState* es, QueryDesc* queryDesc)
+void ExplainQueryText(ExplainState *es, QueryDesc *queryDesc)
 {
     if (queryDesc->sourceText)
         ExplainPropertyText("Query Text", queryDesc->sourceText, es);
@@ -1416,13 +1749,13 @@ void ExplainQueryText(ExplainState* es, QueryDesc* queryDesc)
 /*
  * Explain a list of children of a ExtensiblePlan.
  */
-static void ExplainExtensibleChildren(ExtensiblePlanState* planState, List* ancestors, ExplainState* es)
+static void ExplainExtensibleChildren(ExtensiblePlanState *planState, List *ancestors, ExplainState *es)
 {
-    ListCell* cell = NULL;
-    const char* label = (list_length(planState->extensible_ps) != 1 ? "children" : "child");
+    ListCell *cell = NULL;
+    const char *label = (list_length(planState->extensible_ps) != 1 ? "children" : "child");
 
     foreach (cell, planState->extensible_ps)
-        ExplainNode<false>((PlanState*)lfirst(cell), ancestors, label, NULL, es);
+        ExplainNode<false>((PlanState *)lfirst(cell), ancestors, label, NULL, es);
 }
 
 /*
@@ -1430,7 +1763,7 @@ static void ExplainExtensibleChildren(ExtensiblePlanState* planState, List* ance
  *	  print out the execution plan for one Query for wlm statistics
  * in - queryDesc: query plan description.
  */
-void ExplainOneQueryForStatistics(QueryDesc* queryDesc)
+void ExplainOneQueryForStatistics(QueryDesc *queryDesc)
 {
     ExplainState es;
     ExplainInitState(&es);
@@ -1457,7 +1790,7 @@ void ExplainOneQueryForStatistics(QueryDesc* queryDesc)
 #endif
 
     /* adaptation for active sql */
-    StreamInstrumentation* oldInstr = u_sess->instr_cxt.global_instr;
+    StreamInstrumentation *oldInstr = u_sess->instr_cxt.global_instr;
     u_sess->instr_cxt.global_instr = NULL;
     u_sess->exec_cxt.under_auto_explain = true;
     appendStringInfo(es.str, "Coordinator Name: %s\n", g_instance.attr.attr_common.PGXCNodeName);
@@ -1466,7 +1799,7 @@ void ExplainOneQueryForStatistics(QueryDesc* queryDesc)
     u_sess->instr_cxt.global_instr = oldInstr;
 
     AutoContextSwitch memSwitch(g_instance.wlm_cxt->query_resource_track_mcxt);
-    t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->query_plan = (char*)palloc0(es.str->len + 1 + 1);
+    t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->query_plan = (char *)palloc0(es.str->len + 1 + 1);
     errno_t rc =
         memcpy_s(t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->query_plan, es.str->len, es.str->data, es.str->len);
     securec_check(rc, "\0", "\0");
@@ -1481,17 +1814,17 @@ void ExplainOneQueryForStatistics(QueryDesc* queryDesc)
  * report_triggers -
  *		report execution stats for a single relation's triggers
  */
-static void report_triggers(ResultRelInfo* rInfo, bool show_relname, ExplainState* es)
+static void report_triggers(ResultRelInfo *rInfo, bool show_relname, ExplainState *es)
 {
     int nt;
 
     if (!rInfo->ri_TrigDesc || !rInfo->ri_TrigInstrument)
         return;
     for (nt = 0; nt < rInfo->ri_TrigDesc->numtriggers; nt++) {
-        Trigger* trig = rInfo->ri_TrigDesc->triggers + nt;
-        Instrumentation* instr = rInfo->ri_TrigInstrument + nt;
-        char* relname = NULL;
-        char* conname = NULL;
+        Trigger *trig = rInfo->ri_TrigDesc->triggers + nt;
+        Instrumentation *instr = rInfo->ri_TrigInstrument + nt;
+        char *relname = NULL;
+        char *conname = NULL;
 
         /* Must clean up instrumentation state */
         InstrEndLoop(instr);
@@ -1541,7 +1874,7 @@ static void report_triggers(ResultRelInfo* rInfo, bool show_relname, ExplainStat
 }
 
 /* Compute elapsed time in seconds since given timestamp */
-double elapsed_time(instr_time* starttime)
+double elapsed_time(instr_time *starttime)
 {
     instr_time endtime;
 
@@ -1550,10 +1883,10 @@ double elapsed_time(instr_time* starttime)
     return INSTR_TIME_GET_DOUBLE(endtime);
 }
 
-static void show_bucket_info(PlanState* planstate, ExplainState* es, bool is_pretty)
+static void show_bucket_info(PlanState *planstate, ExplainState *es, bool is_pretty)
 {
-    Scan* scanplan = (Scan*)planstate->plan;
-    BucketInfo* bucket_info = scanplan->bucketInfo;
+    Scan *scanplan = (Scan *)planstate->plan;
+    BucketInfo *bucket_info = scanplan->bucketInfo;
     int selected_buckets = list_length(bucket_info->buckets);
     if (selected_buckets == 0) {
         /* 0 means all buckets */
@@ -1563,11 +1896,8 @@ static void show_bucket_info(PlanState* planstate, ExplainState* es, bool is_pre
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         if (is_pretty) {
             es->planinfo->m_detailInfo->set_plan_name<true, true>();
-            appendStringInfo(es->planinfo->m_detailInfo->info_str,
-                "Selected Buckets %d of %d : %s\n",
-                selected_buckets,
-                BUCKETDATALEN,
-                bucketInfoToString(bucket_info));
+            appendStringInfo(es->planinfo->m_detailInfo->info_str, "Selected Buckets %d of %d : %s\n", selected_buckets,
+                             BUCKETDATALEN, bucketInfoToString(bucket_info));
         } else {
             if (es->wlm_statistics_plan_max_digit) {
                 appendStringInfoSpaces(es->str, *es->wlm_statistics_plan_max_digit);
@@ -1577,11 +1907,8 @@ static void show_bucket_info(PlanState* planstate, ExplainState* es, bool is_pre
                 appendStringInfoSpaces(es->str, es->indent * 2);
             }
 
-            appendStringInfo(es->str,
-                "Selected Buckets %d of %d : %s\n",
-                selected_buckets,
-                BUCKETDATALEN,
-                bucketInfoToString(bucket_info));
+            appendStringInfo(es->str, "Selected Buckets %d of %d : %s\n", selected_buckets, BUCKETDATALEN,
+                             bucketInfoToString(bucket_info));
         }
     }
 }
@@ -1593,7 +1920,7 @@ typedef struct PrintFlags {
     bool print_prev;
 } PrintFlags;
 
-static void set_print_flags(int i, bool showPrev, bool isLast, PrintFlags* flags)
+static void set_print_flags(int i, bool showPrev, bool isLast, PrintFlags *flags)
 {
     if (i == 0) {
         flags->print_prev = false;
@@ -1651,15 +1978,15 @@ static void add_pruning_info_nums(StringInfo dest, PrintFlags flags, int partID,
  * If subpartitions is not pruned at all, show "ALL".
  * The caller should call DestroyStringInfo to free allocated memory.
  */
-static StringInfo get_subpartition_pruning_info(Scan* scanplan, List* rtable)
+static StringInfo get_subpartition_pruning_info(Scan *scanplan, List *rtable)
 {
-    PruningResult* pr = scanplan->pruningInfo;
+    PruningResult *pr = scanplan->pruningInfo;
     StringInfo strif = makeStringInfo();
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     bool all = true;
-    RangeTblEntry* rte = rt_fetch(scanplan->scanrelid, rtable);
+    RangeTblEntry *rte = rt_fetch(scanplan->scanrelid, rtable);
     Relation rel = heap_open(rte->relid, NoLock);
-    List* subpartList = RelationGetSubPartitionOidListList(rel);
+    List *subpartList = RelationGetSubPartitionOidListList(rel);
 
     int idx = 0;
     foreach (lc, pr->ls_selectedSubPartitions) {
@@ -1667,14 +1994,14 @@ static StringInfo get_subpartition_pruning_info(Scan* scanplan, List* rtable)
         if (idx > list_length(subpartList)) {
             break;
         }
-        SubPartitionPruningResult* spr = (SubPartitionPruningResult*)lfirst(lc);
+        SubPartitionPruningResult *spr = (SubPartitionPruningResult *)lfirst(lc);
         /* check if all subpartition is selected */
         int selected = list_length(spr->ls_selectedSubPartitions);
         /* the partseq may be dislocationed if parallel DDL commits, even out of range */
         if (spr->partSeq >= list_length(subpartList)) {
             all = false;
         } else {
-            int count = list_length((List*)list_nth(subpartList, spr->partSeq));
+            int count = list_length((List *)list_nth(subpartList, spr->partSeq));
             all &= (selected == count);
         }
         /* save pruning map in strif temporarily */
@@ -1702,10 +2029,10 @@ static StringInfo get_subpartition_pruning_info(Scan* scanplan, List* rtable)
  * Note that pretty mode is not supported in this version, since subpartitions can only
  * be created in Cent deployment for now and pretty is only for stream plans.
  */
-static void add_subpartition_pruning_info_text(PlanState* planstate, ExplainState* es)
+static void add_subpartition_pruning_info_text(PlanState *planstate, ExplainState *es)
 {
-    Scan* scanplan = (Scan*)planstate->plan;
-    PruningResult* pr = scanplan->pruningInfo;
+    Scan *scanplan = (Scan *)planstate->plan;
+    PruningResult *pr = scanplan->pruningInfo;
     if (pr->ls_selectedSubPartitions == NIL) {
         return;
     }
@@ -1735,10 +2062,10 @@ static void add_subpartition_pruning_info_text(PlanState* planstate, ExplainStat
     appendStringInfoChar(dest, '\n');
 }
 
-static void add_subpartition_pruning_info_others(PlanState* planstate, ExplainState* es)
+static void add_subpartition_pruning_info_others(PlanState *planstate, ExplainState *es)
 {
-    Scan* scanplan = (Scan*)planstate->plan;
-    PruningResult* pr = scanplan->pruningInfo;
+    Scan *scanplan = (Scan *)planstate->plan;
+    PruningResult *pr = scanplan->pruningInfo;
     if (pr->ls_selectedSubPartitions == NIL) {
         return;
     }
@@ -1754,9 +2081,9 @@ static void add_subpartition_pruning_info_others(PlanState* planstate, ExplainSt
     }
 }
 
-static void show_pruning_info(PlanState* planstate, ExplainState* es, bool is_pretty)
+static void show_pruning_info(PlanState *planstate, ExplainState *es, bool is_pretty)
 {
-    Scan* scanplan = (Scan*)planstate->plan;
+    Scan *scanplan = (Scan *)planstate->plan;
     PrintFlags flags = {false, false, false, false};
     int partID = 0;
     int partID_prev = 0;
@@ -1784,14 +2111,13 @@ static void show_pruning_info(PlanState* planstate, ExplainState* es, bool is_pr
             else
                 appendStringInfo(es->planinfo->m_detailInfo->info_str, "NONE");
         } else if (scanplan->pruningInfo->expr != NULL) {
-                appendStringInfo(es->str, "%s", "PART");
+            appendStringInfo(es->str, "%s", "PART");
         } else {
-            ListCell* cell = NULL;
-            List* part_seqs = scanplan->pruningInfo->ls_rangeSelectedPartitions;
+            ListCell *cell = NULL;
+            List *part_seqs = scanplan->pruningInfo->ls_rangeSelectedPartitions;
 
-            AssertEreport(scanplan->itrs == scanplan->pruningInfo->ls_rangeSelectedPartitions->length,
-                MOD_EXECUTOR,
-                "unexpect list length");
+            AssertEreport(scanplan->itrs == scanplan->pruningInfo->ls_rangeSelectedPartitions->length, MOD_EXECUTOR,
+                          "unexpect list length");
             foreach (cell, part_seqs) {
                 // store the prev first partID
                 if (i > 0) {
@@ -1829,12 +2155,11 @@ static void show_pruning_info(PlanState* planstate, ExplainState* es, bool is_pr
         } else {
             int i = 0;
             StringInfo strif;
-            ListCell* cell = NULL;
-            List* part_seqs = scanplan->pruningInfo->ls_rangeSelectedPartitions;
+            ListCell *cell = NULL;
+            List *part_seqs = scanplan->pruningInfo->ls_rangeSelectedPartitions;
 
-            AssertEreport(scanplan->itrs == scanplan->pruningInfo->ls_rangeSelectedPartitions->length,
-                MOD_EXECUTOR,
-                "unexpect list length");
+            AssertEreport(scanplan->itrs == scanplan->pruningInfo->ls_rangeSelectedPartitions->length, MOD_EXECUTOR,
+                          "unexpect list length");
 
             /*form a tring of partition numbers, by 2 charaters space splitted*/
             strif = makeStringInfo();
@@ -1864,100 +2189,100 @@ static void show_pruning_info(PlanState* planstate, ExplainState* es, bool is_pr
     }
 }
 
-static void ExplainNodePartition(const Plan* plan, ExplainState* es)
+static void ExplainNodePartition(const Plan *plan, ExplainState *es)
 {
     int flag = 0;
     switch (nodeTag(plan->lefttree)) {
         case T_SeqScan:
-            if (((SeqScan*)plan->lefttree)->pruningInfo->expr != NULL) {
+            if (((SeqScan *)plan->lefttree)->pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
 #ifdef USE_SPQ
         case T_SpqSeqScan:
-            if (((SpqSeqScan*)plan->lefttree)->scan.pruningInfo->expr != NULL) {
+            if (((SpqSeqScan *)plan->lefttree)->scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_SpqIndexScan:
-            if (((SpqIndexScan*)plan->lefttree)->scan.scan.pruningInfo->expr != NULL) {
+            if (((SpqIndexScan *)plan->lefttree)->scan.scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_SpqIndexOnlyScan:
-            if (((SpqIndexOnlyScan*)plan->lefttree)->scan.scan.pruningInfo->expr != NULL) {
+            if (((SpqIndexOnlyScan *)plan->lefttree)->scan.scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_SpqBitmapHeapScan:
-            if (((SpqBitmapHeapScan*)plan->lefttree)->scan.scan.pruningInfo->expr != NULL) {
+            if (((SpqBitmapHeapScan *)plan->lefttree)->scan.scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
 #endif
         case T_IndexScan:
-            if (((IndexScan*)plan->lefttree)->scan.pruningInfo->expr != NULL) {
+            if (((IndexScan *)plan->lefttree)->scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_IndexOnlyScan:
-            if (((IndexOnlyScan*)plan->lefttree)->scan.pruningInfo->expr != NULL) {
+            if (((IndexOnlyScan *)plan->lefttree)->scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_BitmapIndexScan:
-            if (((BitmapIndexScan*)plan->lefttree)->scan.pruningInfo->expr != NULL) {
+            if (((BitmapIndexScan *)plan->lefttree)->scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_BitmapHeapScan:
-            if (((BitmapHeapScan*)plan->lefttree)->scan.pruningInfo->expr != NULL) {
+            if (((BitmapHeapScan *)plan->lefttree)->scan.pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
         case T_CStoreScan:
-            if (((CStoreScan*)plan->lefttree)->pruningInfo->expr != NULL) {
+            if (((CStoreScan *)plan->lefttree)->pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
 #ifdef ENABLE_MULTIPLE_NODES
         case T_TsStoreScan:
-            if (((TsStoreScan*)plan->lefttree)->pruningInfo->expr != NULL) {
+            if (((TsStoreScan *)plan->lefttree)->pruningInfo->expr != NULL) {
                 appendStringInfo(es->str, "Iterations: %s", "PART");
                 flag = 1;
             }
             break;
 #endif
         default:
-            appendStringInfo(es->str, "Iterations: %d", ((PartIterator*)plan)->itrs);
+            appendStringInfo(es->str, "Iterations: %d", ((PartIterator *)plan)->itrs);
             flag = 1;
             break;
     }
     if (flag == 0) {
-        appendStringInfo(es->str, "Iterations: %d", ((PartIterator*)plan)->itrs);
+        appendStringInfo(es->str, "Iterations: %d", ((PartIterator *)plan)->itrs);
     }
 }
 
-static bool GetSubPartitionIterations(const Plan* plan, const ExplainState* es, int* cnt)
+static bool GetSubPartitionIterations(const Plan *plan, const ExplainState *es, int *cnt)
 {
     *cnt = 0;
-    const Plan* curPlan = plan;
+    const Plan *curPlan = plan;
     switch (nodeTag(curPlan->lefttree)) {
         case T_RowToVec: {
-            RowToVec* rowToVecPlan = (RowToVec*)curPlan->lefttree;
-            Plan* scanPlan = (Plan*)rowToVecPlan->plan.lefttree;
+            RowToVec *rowToVecPlan = (RowToVec *)curPlan->lefttree;
+            Plan *scanPlan = (Plan *)rowToVecPlan->plan.lefttree;
             if (!(IsA(scanPlan, Scan) || IsA(scanPlan, SeqScan) || IsA(scanPlan, IndexOnlyScan) ||
-                IsA(scanPlan, IndexScan) || IsA(scanPlan, BitmapHeapScan) || IsA(scanPlan, TidScan))) {
+                  IsA(scanPlan, IndexScan) || IsA(scanPlan, BitmapHeapScan) || IsA(scanPlan, TidScan))) {
                 break;
             }
             curPlan = &rowToVecPlan->plan;
@@ -1976,13 +2301,13 @@ static bool GetSubPartitionIterations(const Plan* plan, const ExplainState* es, 
         case T_BitmapHeapScan:
         case T_CStoreScan:
         case T_TidScan: {
-            PruningResult* pr = ((Scan*)curPlan->lefttree)->pruningInfo;
+            PruningResult *pr = ((Scan *)curPlan->lefttree)->pruningInfo;
             if (pr == NULL || pr->ls_selectedSubPartitions == NIL || pr->expr != NULL) {
                 return false;
             }
-            ListCell* lc = NULL;
+            ListCell *lc = NULL;
             foreach (lc, pr->ls_selectedSubPartitions) {
-                SubPartitionPruningResult* spr = (SubPartitionPruningResult*)lfirst(lc);
+                SubPartitionPruningResult *spr = (SubPartitionPruningResult *)lfirst(lc);
                 *cnt += list_length(spr->ls_selectedSubPartitions);
             }
             return true;
@@ -1994,7 +2319,7 @@ static bool GetSubPartitionIterations(const Plan* plan, const ExplainState* es, 
 }
 
 #ifndef ENABLE_MULTIPLE_NODES
-static void PredAppendInfo(Plan* plan, StringInfoData buf, ExplainState* es)
+static void PredAppendInfo(Plan *plan, StringInfoData buf, ExplainState *es)
 {
     if (es->planinfo->m_planInfo->m_pred_time && plan->pred_total_time >= 0) {
         initStringInfo(&buf);
@@ -2004,19 +2329,16 @@ static void PredAppendInfo(Plan* plan, StringInfoData buf, ExplainState* es)
     }
 
     if (es->planinfo->m_planInfo->m_pred_row && plan->pred_rows >= 0) {
-        es->planinfo->m_planInfo->put(PREDICT_ROWS, 
-                                        DirectFunctionCall1(dround,
-                                                            Float8GetDatum(plan->pred_rows)));
+        es->planinfo->m_planInfo->put(PREDICT_ROWS, DirectFunctionCall1(dround, Float8GetDatum(plan->pred_rows)));
     }
 
     if (es->planinfo->m_planInfo->m_pred_mem && plan->pred_max_memory >= 0) {
         es->planinfo->m_planInfo->put(PREDICT_MEMORY,
-                                        DirectFunctionCall1(pg_size_pretty, 
-                                                            Int64GetDatum(plan->pred_max_memory)));
+                                      DirectFunctionCall1(pg_size_pretty, Int64GetDatum(plan->pred_max_memory)));
     }
 }
 
-static void PredGetInfo(Plan* plan, ExplainState* es)
+static void PredGetInfo(Plan *plan, ExplainState *es)
 {
     if (plan->pred_startup_time >= 0) {
         ExplainPropertyFloat("Pred Startup Time", plan->pred_startup_time, 2, es);
@@ -2030,7 +2352,7 @@ static void PredGetInfo(Plan* plan, ExplainState* es)
     if (plan->pred_max_memory >= 0) {
         ExplainPropertyLong("Pred Peak Memory", plan->pred_max_memory, es);
     }
-} 
+}
 #endif
 
 /*
@@ -2054,14 +2376,14 @@ static void PredGetInfo(Plan* plan, ExplainState* es)
  * is controlled by ExplainOpenGroup/ExplainCloseGroup.
  */
 template <bool is_pretty>
-static void ExplainNode(
-    PlanState* planstate, List* ancestors, const char* relationship, const char* plan_name, ExplainState* es)
+static void ExplainNode(PlanState *planstate, List *ancestors, const char *relationship, const char *plan_name,
+                        ExplainState *es)
 {
-    Plan* plan = planstate->plan;
-    char* pname = NULL; /* node type name for text output */
-    char* sname = NULL; /* node type name for non-text output */
-    char* strategy = NULL;
-    char* operation = NULL;
+    Plan *plan = planstate->plan;
+    char *pname = NULL; /* node type name for text output */
+    char *sname = NULL; /* node type name for non-text output */
+    char *strategy = NULL;
+    char *operation = NULL;
     int save_indent = es->indent;
     int save_pindent = es->pindent;
     bool haschildren = false;
@@ -2075,10 +2397,10 @@ static void ExplainNode(
 #endif
 
     /* For plan_table column */
-    char* pt_operation = NULL;
-    char* pt_options = NULL;
-    const char* pt_index_name = NULL;
-    const char* pt_index_owner = NULL;
+    char *pt_operation = NULL;
+    char *pt_options = NULL;
+    const char *pt_index_name = NULL;
+    const char *pt_index_owner = NULL;
 
     if (is_pretty) {
         if (plan->plan_node_id == 0)
@@ -2102,9 +2424,9 @@ static void ExplainNode(
         }
 
         if (es->analyze && (IsA(plan, RemoteQuery) || IsA(plan, VecRemoteQuery))) {
-            show_dn_executor_time(es, plan_node_id, DN_START_TIME);  /* print executor start time */
-            show_dn_executor_time(es, plan_node_id, DN_RUN_TIME); /* print executor run time */
-            show_dn_executor_time(es, plan_node_id, DN_END_TIME); /* print executor end time */
+            show_dn_executor_time(es, plan_node_id, DN_START_TIME); /* print executor start time */
+            show_dn_executor_time(es, plan_node_id, DN_RUN_TIME);   /* print executor run time */
+            show_dn_executor_time(es, plan_node_id, DN_END_TIME);   /* print executor end time */
         }
     }
 
@@ -2156,7 +2478,7 @@ static void ExplainNode(
         case T_CStoreScan:
 #ifdef ENABLE_MULTIPLE_NODES
         case T_TsStoreScan:
-#endif   /* ENABLE_MULTIPLE_NODES */
+#endif /* ENABLE_MULTIPLE_NODES */
         case T_BitmapHeapScan:
         case T_CStoreIndexHeapScan:
         case T_TidScan:
@@ -2168,62 +2490,60 @@ static void ExplainNode(
         case T_WorkTableScan:
         case T_ForeignScan:
         case T_VecForeignScan:
-            if (((Scan *) plan)->scanrelid > 0) {
-                ExplainScanTarget((Scan*)plan, es);
+            if (((Scan *)plan)->scanrelid > 0) {
+                ExplainScanTarget((Scan *)plan, es);
             }
             break;
         case T_TrainModel:
             appendStringInfo(es->str, " - %s", sname);
             break;
         case T_ExtensiblePlan:
-            if (((Scan*)plan)->scanrelid > 0)
-                ExplainScanTarget((Scan*)plan, es);
+            if (((Scan *)plan)->scanrelid > 0)
+                ExplainScanTarget((Scan *)plan, es);
             break;
 #ifdef USE_SPQ
         case T_Stream: {
-            es->current_id = ((Stream*)plan)->streamID;
-        }
-        break;
- 
-        case T_ShareInputScan:  {
-            ShareInputScan *sisc = (ShareInputScan *) plan;
+            es->current_id = ((Stream *)plan)->streamID;
+        } break;
+
+        case T_ShareInputScan: {
+            ShareInputScan *sisc = (ShareInputScan *)plan;
             int slice_id = es->current_id;
- 
+
             if (es->format == EXPLAIN_FORMAT_TEXT) {
                 appendStringInfo(es->str, " (%s; slice%d; share%d; producer:%d)",
-                                    (sisc->is_producer ? "Producer" : "Consumer"),
-                                    slice_id, sisc->share_id, sisc->producer_slice_id);
+                                 (sisc->is_producer ? "Producer" : "Consumer"), slice_id, sisc->share_id,
+                                 sisc->producer_slice_id);
             } else {
                 ExplainPropertyText("Identity", (sisc->is_producer ? "Producer" : "Consumer"), es);
                 ExplainPropertyInteger("Producer ID", sisc->producer_slice_id, es);
                 ExplainPropertyInteger("Share ID", sisc->share_id, es);
                 ExplainPropertyInteger("Slice ID", slice_id, es);
             }
-        }
-        break;
+        } break;
 #endif
 #ifdef PGXC
         case T_RemoteQuery:
         case T_VecRemoteQuery:
 #ifdef USE_SPQ
-            es->current_id = ((RemoteQuery*)plan)->streamID;
-#endif 
+            es->current_id = ((RemoteQuery *)plan)->streamID;
+#endif
             /* Emit node execution list */
-            ExplainExecNodes(((RemoteQuery*)plan)->exec_nodes, es);
+            ExplainExecNodes(((RemoteQuery *)plan)->exec_nodes, es);
 #ifdef STREAMPLAN
             if (!IS_STREAM)
 #endif
-                ExplainScanTarget((Scan*)plan, es);
+                ExplainScanTarget((Scan *)plan, es);
             break;
 #endif
 #ifdef USE_SPQ
         case T_SpqIndexScan:
 #endif
         case T_IndexScan: {
-            IndexScan* indexscan = (IndexScan*)plan;
+            IndexScan *indexscan = (IndexScan *)plan;
 
             ExplainIndexScanDetails(indexscan->indexid, indexscan->indexorderdir, es);
-            ExplainScanTarget((Scan*)indexscan, es);
+            ExplainScanTarget((Scan *)indexscan, es);
 
             pt_index_name = explain_get_index_name(indexscan->indexid);
             pt_index_owner = get_namespace_name(get_rel_namespace(indexscan->indexid));
@@ -2232,17 +2552,17 @@ static void ExplainNode(
         case T_SpqIndexOnlyScan:
 #endif
         case T_IndexOnlyScan: {
-            IndexOnlyScan* indexonlyscan = (IndexOnlyScan*)plan;
+            IndexOnlyScan *indexonlyscan = (IndexOnlyScan *)plan;
 
             ExplainIndexScanDetails(indexonlyscan->indexid, indexonlyscan->indexorderdir, es);
-            ExplainScanTarget((Scan*)indexonlyscan, es);
+            ExplainScanTarget((Scan *)indexonlyscan, es);
 
             pt_index_name = explain_get_index_name(indexonlyscan->indexid);
             pt_index_owner = get_namespace_name(get_rel_namespace(indexonlyscan->indexid));
         } break;
         case T_BitmapIndexScan: {
-            BitmapIndexScan* bitmapindexscan = (BitmapIndexScan*)plan;
-            const char* indexname = explain_get_index_name(bitmapindexscan->indexid);
+            BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *)plan;
+            const char *indexname = explain_get_index_name(bitmapindexscan->indexid);
 
             if (es->format == EXPLAIN_FORMAT_TEXT) {
                 appendStringInfo(es->str, " on %s", indexname);
@@ -2258,17 +2578,17 @@ static void ExplainNode(
             pt_index_owner = get_namespace_name(get_rel_namespace(bitmapindexscan->indexid));
         } break;
         case T_CStoreIndexScan: {
-            CStoreIndexScan* indexscan = (CStoreIndexScan*)plan;
+            CStoreIndexScan *indexscan = (CStoreIndexScan *)plan;
 
             ExplainIndexScanDetails(indexscan->indexid, indexscan->indexorderdir, es);
-            ExplainScanTarget((Scan*)indexscan, es);
+            ExplainScanTarget((Scan *)indexscan, es);
 
             pt_index_name = explain_get_index_name(indexscan->indexid);
             pt_index_owner = get_namespace_name(get_rel_namespace(indexscan->indexid));
         } break;
         case T_CStoreIndexCtidScan: {
-            CStoreIndexCtidScan* bitmapindexscan = (CStoreIndexCtidScan*)plan;
-            const char* indexname = explain_get_index_name(bitmapindexscan->indexid);
+            CStoreIndexCtidScan *bitmapindexscan = (CStoreIndexCtidScan *)plan;
+            const char *indexname = explain_get_index_name(bitmapindexscan->indexid);
 
             if (es->format == EXPLAIN_FORMAT_TEXT)
                 appendStringInfo(es->str, " on %s", indexname);
@@ -2280,7 +2600,7 @@ static void ExplainNode(
         } break;
         case T_ModifyTable:
         case T_VecModifyTable:
-            ExplainModifyTarget((ModifyTable*)plan, es);
+            ExplainModifyTarget((ModifyTable *)plan, es);
             break;
         case T_NestLoop:
         case T_VecNestLoop:
@@ -2288,9 +2608,9 @@ static void ExplainNode(
         case T_MergeJoin:
         case T_HashJoin:
         case T_VecHashJoin: {
-            const char* jointype = NULL;
+            const char *jointype = NULL;
 
-            switch (((Join*)plan)->jointype) {
+            switch (((Join *)plan)->jointype) {
                 case JOIN_INNER:
                     jointype = pt_options = "Inner";
                     break;
@@ -2341,29 +2661,23 @@ static void ExplainNode(
                  * into the node type name...
                  */
                 if (is_pretty == false) {
-                    if (((Join*)plan)->jointype != JOIN_INNER) {
+                    if (((Join *)plan)->jointype != JOIN_INNER) {
                         appendStringInfo(es->str, " %s Join", jointype);
                     } else if (!(IsA(plan, NestLoop) || IsA(plan, VecNestLoop))) {
                         appendStringInfo(es->str, " Join");
                     }
 
                 } else {
-                    if (((Join*)plan)->jointype != JOIN_INNER) {
-                        appendStringInfo(tmpName,
-                            " %s Join (%d, %d)",
-                            jointype,
-                            planstate->lefttree->plan->plan_node_id,
-                            planstate->righttree->plan->plan_node_id);
+                    if (((Join *)plan)->jointype != JOIN_INNER) {
+                        appendStringInfo(tmpName, " %s Join (%d, %d)", jointype,
+                                         planstate->lefttree->plan->plan_node_id,
+                                         planstate->righttree->plan->plan_node_id);
                     } else if (!(IsA(plan, NestLoop) || IsA(plan, VecNestLoop))) {
-                        appendStringInfo(tmpName,
-                            " Join (%d,%d)",
-                            planstate->lefttree->plan->plan_node_id,
-                            planstate->righttree->plan->plan_node_id);
+                        appendStringInfo(tmpName, " Join (%d,%d)", planstate->lefttree->plan->plan_node_id,
+                                         planstate->righttree->plan->plan_node_id);
                     } else {
-                        appendStringInfo(tmpName,
-                            " (%d,%d)",
-                            planstate->lefttree->plan->plan_node_id,
-                            planstate->righttree->plan->plan_node_id);
+                        appendStringInfo(tmpName, " (%d,%d)", planstate->lefttree->plan->plan_node_id,
+                                         planstate->righttree->plan->plan_node_id);
                     }
                 }
             } else
@@ -2371,9 +2685,9 @@ static void ExplainNode(
         } break;
         case T_SetOp:
         case T_VecSetOp: {
-            const char* setopcmd = NULL;
+            const char *setopcmd = NULL;
 
-            switch (((SetOp*)plan)->cmd) {
+            switch (((SetOp *)plan)->cmd) {
                 case SETOPCMD_INTERSECT:
                     setopcmd = "Intersect";
                     break;
@@ -2400,9 +2714,9 @@ static void ExplainNode(
         } break;
 
         case T_PartIterator: {
-            const char* scandir = NULL;
+            const char *scandir = NULL;
 
-            if (ScanDirectionIsBackward(((PartIterator*)plan)->direction))
+            if (ScanDirectionIsBackward(((PartIterator *)plan)->direction))
                 scandir = "Scan Backward";
 
             if (scandir != NULL) {
@@ -2421,8 +2735,8 @@ static void ExplainNode(
         case T_VecAppend: {
             if (is_pretty) {
                 /* print append plan's subplan node id, like Vector Append(6, 7) */
-                int nplans = list_length(((Append*)plan)->appendplans);
-                PlanState** append_planstate = ((AppendState*)planstate)->appendplans;
+                int nplans = list_length(((Append *)plan)->appendplans);
+                PlanState **append_planstate = ((AppendState *)planstate)->appendplans;
                 bool first = true;
 
                 appendStringInfo(tmpName, "(");
@@ -2439,10 +2753,8 @@ static void ExplainNode(
         } break;
         case T_RecursiveUnion: {
             if (es->format == EXPLAIN_FORMAT_TEXT && is_pretty)
-                appendStringInfo(tmpName,
-                    " (%d,%d)",
-                    planstate->lefttree->plan->plan_node_id,
-                    planstate->righttree->plan->plan_node_id);
+                appendStringInfo(tmpName, " (%d,%d)", planstate->lefttree->plan->plan_node_id,
+                                 planstate->righttree->plan->plan_node_id);
         } break;
         default:
             break;
@@ -2450,13 +2762,11 @@ static void ExplainNode(
 
     /* For recursive query consideration */
     if (GET_CONTROL_PLAN_NODEID(plan) != 0 && u_sess->attr.attr_sql.enable_stream_recursive) {
-        appendStringInfo(
-            es->str, " <<ruid:[%d] ctlid:[%d]", GET_RECURSIVE_UNION_PLAN_NODEID(plan), GET_CONTROL_PLAN_NODEID(plan));
+        appendStringInfo(es->str, " <<ruid:[%d] ctlid:[%d]", GET_RECURSIVE_UNION_PLAN_NODEID(plan),
+                         GET_CONTROL_PLAN_NODEID(plan));
         if (is_pretty)
-            appendStringInfo(tmpName,
-                " <<ruid:[%d] ctlid:[%d]",
-                GET_RECURSIVE_UNION_PLAN_NODEID(plan),
-                GET_CONTROL_PLAN_NODEID(plan));
+            appendStringInfo(tmpName, " <<ruid:[%d] ctlid:[%d]", GET_RECURSIVE_UNION_PLAN_NODEID(plan),
+                             GET_CONTROL_PLAN_NODEID(plan));
 
         if (plan->is_sync_plannode) {
             appendStringInfo(es->str, " (SYNC)");
@@ -2469,9 +2779,9 @@ static void ExplainNode(
             appendStringInfo(tmpName, ">>");
     }
 
-    if (u_sess->attr.attr_sql.enable_stream_recursive && IsA(plan, Stream) && ((Stream*)plan)->stream_level > 0 &&
+    if (u_sess->attr.attr_sql.enable_stream_recursive && IsA(plan, Stream) && ((Stream *)plan)->stream_level > 0 &&
         plan->recursive_union_plan_nodeid != 0) {
-        Stream* stream_plan = (Stream*)plan;
+        Stream *stream_plan = (Stream *)plan;
 
         appendStringInfo(es->str, " stream_level:%d ", stream_plan->stream_level);
         if (is_pretty)
@@ -2505,15 +2815,15 @@ static void ExplainNode(
         es->planinfo->append_str_info("%3d --%s\n", plan_node_id, es->planinfo->m_planInfo->m_pname.data);
         es->planinfo->set_pname(es->planinfo->m_planInfo->m_pname.data);
         if (es->planinfo->m_runtimeinfo)
-            es->planinfo->m_runtimeinfo->put(
-                -1, -1, PLAN_NAME, PointerGetDatum(cstring_to_text(es->planinfo->m_planInfo->m_pname.data)));
+            es->planinfo->m_runtimeinfo->put(-1, -1, PLAN_NAME,
+                                             PointerGetDatum(cstring_to_text(es->planinfo->m_planInfo->m_pname.data)));
     }
 
     if (es->costs) {
         if (es->format == EXPLAIN_FORMAT_TEXT) {
             if (is_pretty == false) {
-                appendStringInfo(
-                    es->str, "  (cost=%.2f..%.2f rows=%.0f ", plan->startup_cost, plan->total_cost, plan->plan_rows);
+                appendStringInfo(es->str, "  (cost=%.2f..%.2f rows=%.0f ", plan->startup_cost, plan->total_cost,
+                                 plan->plan_rows);
 #ifndef ENABLE_MULTIPLE_NODES
                 if (plan->pred_total_time >= 0) {
                     appendStringInfo(es->str, "p-time=%.0f ", plan->pred_total_time);
@@ -2523,10 +2833,9 @@ static void ExplainNode(
                 }
 #endif /* ENABLE_MULTIPLE_NODES */
                 if ((IsA(plan, HashJoin) || IsA(plan, VecHashJoin)) && es->verbose)
-                    appendStringInfo(es->str,
-                        "distinct=[%.0f, %.0f] ",
-                        plan->outerdistinct > 0 ? ceil(plan->outerdistinct) : 1.0,
-                        plan->innerdistinct > 0 ? ceil(plan->innerdistinct) : 1.0);
+                    appendStringInfo(es->str, "distinct=[%.0f, %.0f] ",
+                                     plan->outerdistinct > 0 ? ceil(plan->outerdistinct) : 1.0,
+                                     plan->innerdistinct > 0 ? ceil(plan->innerdistinct) : 1.0);
                 appendStringInfo(es->str, "width=%d)", plan->plan_width);
             } else {
                 StringInfoData buf;
@@ -2538,16 +2847,14 @@ static void ExplainNode(
                 PredAppendInfo(plan, buf, es);
 #endif
                 /* Here we need call round function, avoid E_rows appear decimal fraction.*/
-                es->planinfo->m_planInfo->put(
-                    ESTIMATE_ROWS, DirectFunctionCall1(dround, Float8GetDatum(plan->plan_rows)));
+                es->planinfo->m_planInfo->put(ESTIMATE_ROWS,
+                                              DirectFunctionCall1(dround, Float8GetDatum(plan->plan_rows)));
                 if ((IsA(plan, HashJoin) || IsA(plan, VecHashJoin)) && es->verbose) {
                     char opdist[130] = "\0";
                     int rc = EOK;
-                    rc = sprintf_s(opdist,
-                        sizeof(opdist),
-                        "%.0f, %.0f",
-                        plan->outerdistinct > 1 ? ceil(plan->outerdistinct) : 1.0,
-                        plan->innerdistinct > 1 ? ceil(plan->innerdistinct) : 1.0);
+                    rc = sprintf_s(opdist, sizeof(opdist), "%.0f, %.0f",
+                                   plan->outerdistinct > 1 ? ceil(plan->outerdistinct) : 1.0,
+                                   plan->innerdistinct > 1 ? ceil(plan->innerdistinct) : 1.0);
                     securec_check_ss(rc, "\0", "\0");
                     es->planinfo->m_planInfo->put(ESTIMATE_DISTINCT, PointerGetDatum(cstring_to_text(opdist)));
                 }
@@ -2561,11 +2868,8 @@ static void ExplainNode(
                             rc = sprintf_s(memstr, sizeof(memstr), "%dKB", (int)plan->operatorMemKB[0]);
                         else {
                             if (plan->operatorMemKB[0] > MIN_OP_MEM && plan->operatorMaxMem > plan->operatorMemKB[0])
-                                rc = sprintf_s(memstr,
-                                    sizeof(memstr),
-                                    "%dMB(%dMB)",
-                                    (int)plan->operatorMemKB[0] / 1024,
-                                    (int)plan->operatorMaxMem / 1024);
+                                rc = sprintf_s(memstr, sizeof(memstr), "%dMB(%dMB)", (int)plan->operatorMemKB[0] / 1024,
+                                               (int)plan->operatorMaxMem / 1024);
                             else
                                 rc = sprintf_s(memstr, sizeof(memstr), "%dMB", (int)plan->operatorMemKB[0] / 1024);
                         }
@@ -2602,8 +2906,8 @@ static void ExplainNode(
                 show_pretty_time(es, planstate->instrument, NULL, -1, -1, 0);
                 if (es->planinfo->m_runtimeinfo != NULL) {
                     if (unlikely(planstate->instrument == NULL)) {
-                        ereport(ERROR,
-                            (errcode(ERRCODE_UNEXPECTED_NULL_VALUE), errmsg("invalid planstate->instrument value.")));
+                        ereport(ERROR, (errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
+                                        errmsg("invalid planstate->instrument value.")));
                     }
                     get_oper_time<false>(es, planstate, planstate->instrument, -1, -1);
                 }
@@ -2627,8 +2931,8 @@ static void ExplainNode(
         case T_NestLoop:
         case T_MergeJoin:
         case T_HashJoin:
-            if (es->format != EXPLAIN_FORMAT_TEXT || (es->verbose && ((Join *) plan)->inner_unique))
-                ExplainProperty("Inner Unique", ((Join *) plan)->inner_unique?"true":"false", true, es);
+            if (es->format != EXPLAIN_FORMAT_TEXT || (es->verbose && ((Join *)plan)->inner_unique))
+                ExplainProperty("Inner Unique", ((Join *)plan)->inner_unique ? "true" : "false", true, es);
             if (is_pretty && es->verbose && ((Join *)plan)->inner_unique) {
                 es->planinfo->m_detailInfo->set_plan_name<true, true>();
                 appendStringInfo(es->planinfo->m_detailInfo->info_str, "Inner Unique: %s\n",
@@ -2645,10 +2949,10 @@ static void ExplainNode(
         case T_SpqIndexScan:
 #endif
         case T_IndexScan:
-            show_scan_qual(((IndexScan*)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
-            if (((IndexScan*)plan)->indexqualorig)
+            show_scan_qual(((IndexScan *)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
+            if (((IndexScan *)plan)->indexqualorig)
                 show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
-            show_scan_qual(((IndexScan*)plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
+            show_scan_qual(((IndexScan *)plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
             show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
@@ -2657,27 +2961,27 @@ static void ExplainNode(
         case T_SpqIndexOnlyScan:
 #endif
         case T_IndexOnlyScan:
-            show_scan_qual(((IndexOnlyScan*)plan)->indexqual, "Index Cond", planstate, ancestors, es);
-            if (((IndexOnlyScan*)plan)->indexqual)
+            show_scan_qual(((IndexOnlyScan *)plan)->indexqual, "Index Cond", planstate, ancestors, es);
+            if (((IndexOnlyScan *)plan)->indexqual)
                 show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
-            show_scan_qual(((IndexOnlyScan*)plan)->indexorderby, "Order By", planstate, ancestors, es);
+            show_scan_qual(((IndexOnlyScan *)plan)->indexorderby, "Order By", planstate, ancestors, es);
             show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
             if (es->analyze)
-                ExplainPropertyLong("Heap Fetches", ((IndexOnlyScanState*)planstate)->ioss_HeapFetches, es);
+                ExplainPropertyLong("Heap Fetches", ((IndexOnlyScanState *)planstate)->ioss_HeapFetches, es);
             break;
         case T_BitmapIndexScan:
-            show_scan_qual(((BitmapIndexScan*)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
+            show_scan_qual(((BitmapIndexScan *)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
             break;
         case T_CStoreIndexCtidScan:
-            show_scan_qual(((CStoreIndexCtidScan*)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
+            show_scan_qual(((CStoreIndexCtidScan *)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
             break;
         case T_CStoreIndexScan:
-            show_scan_qual(((CStoreIndexScan*)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
-            if (((CStoreIndexScan*)plan)->indexqualorig)
+            show_scan_qual(((CStoreIndexScan *)plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
+            if (((CStoreIndexScan *)plan)->indexqualorig)
                 show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
-            show_scan_qual(((CStoreIndexScan*)plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
+            show_scan_qual(((CStoreIndexScan *)plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
             show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
@@ -2687,13 +2991,13 @@ static void ExplainNode(
         case T_ModifyTable:
         case T_VecModifyTable: {
             /* Remote query planning on DMLs */
-            ModifyTable* mt = (ModifyTable*)plan;
-            ListCell* elt = NULL;
-            ListCell* lc = NULL;
+            ModifyTable *mt = (ModifyTable *)plan;
+            ListCell *elt = NULL;
+            ListCell *lc = NULL;
             if (mt->operation == CMD_MERGE) {
                 if (es->analyze) {
-                    if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL
-                        && es->planinfo->m_detailInfo != NULL) {
+                    if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL &&
+                        es->planinfo->m_detailInfo != NULL) {
                         es->planinfo->m_detailInfo->set_plan_name<true, false>();
                     }
 
@@ -2704,7 +3008,7 @@ static void ExplainNode(
                 show_modifytable_merge_info(planstate, es);
 
                 foreach (lc, mt->mergeActionList) {
-                    MergeAction* action = (MergeAction*)lfirst(lc);
+                    MergeAction *action = (MergeAction *)lfirst(lc);
 
                     if (action->matched) {
                         if (mt->remote_update_plans) {
@@ -2713,12 +3017,12 @@ static void ExplainNode(
                             es->indent++;
                             foreach (elt, mt->remote_update_plans) {
                                 if (lfirst(elt)) {
-                                    ExplainRemoteQuery((RemoteQuery*)lfirst(elt), planstate, ancestors, es);
+                                    ExplainRemoteQuery((RemoteQuery *)lfirst(elt), planstate, ancestors, es);
                                 }
                             }
                             es->indent--;
                         } else
-                            show_scan_qual((List*)action->qual, "Update Cond", planstate, ancestors, es, true);
+                            show_scan_qual((List *)action->qual, "Update Cond", planstate, ancestors, es, true);
                     } else if (!action->matched) {
                         if (mt->remote_insert_plans) {
                             appendStringInfoSpaces(es->str, es->indent * 2);
@@ -2726,26 +3030,26 @@ static void ExplainNode(
                             es->indent++;
                             foreach (elt, mt->remote_insert_plans) {
                                 if (lfirst(elt)) {
-                                    ExplainRemoteQuery((RemoteQuery*)lfirst(elt), planstate, ancestors, es);
+                                    ExplainRemoteQuery((RemoteQuery *)lfirst(elt), planstate, ancestors, es);
                                 }
                             }
                             es->indent--;
                         } else
-                            show_scan_qual((List*)action->qual, "Insert Cond", planstate, ancestors, es, true);
+                            show_scan_qual((List *)action->qual, "Insert Cond", planstate, ancestors, es, true);
                     }
                 }
 
             } else {
                 /* upsert cases */
-                ModifyTableState* mtstate = (ModifyTableState*)planstate;
-                if (mtstate->mt_upsert != NULL && 
-                    mtstate->mt_upsert->us_action != UPSERT_NONE && mtstate->resultRelInfo->ri_NumIndices > 0) {
+                ModifyTableState *mtstate = (ModifyTableState *)planstate;
+                if (mtstate->mt_upsert != NULL && mtstate->mt_upsert->us_action != UPSERT_NONE &&
+                    mtstate->resultRelInfo->ri_NumIndices > 0) {
                     show_on_duplicate_info(mtstate, es, ancestors);
                 }
                 /* non-merge cases */
                 foreach (elt, mt->remote_plans) {
                     if (lfirst(elt)) {
-                        ExplainRemoteQuery((RemoteQuery*)lfirst(elt), planstate, ancestors, es);
+                        ExplainRemoteQuery((RemoteQuery *)lfirst(elt), planstate, ancestors, es);
                     }
                 }
             }
@@ -2754,12 +3058,12 @@ static void ExplainNode(
         case T_VecRemoteQuery:
             /* Remote query */
             show_merge_sort_keys(planstate, ancestors, es);
-            ExplainRemoteQuery((RemoteQuery*)plan, planstate, ancestors, es);
+            ExplainRemoteQuery((RemoteQuery *)plan, planstate, ancestors, es);
             show_scan_qual(plan->qual, "Coordinator quals", planstate, ancestors, es);
             break;
 #else
         case T_ModifyTable:
-            show_modifytable_info((ModifyTableState*)planstate, es);
+            show_modifytable_info((ModifyTableState *)planstate, es);
             break;
 #endif
 #ifdef USE_SPQ
@@ -2767,28 +3071,28 @@ static void ExplainNode(
 #endif
         case T_BitmapHeapScan:
         case T_CStoreIndexHeapScan:
-            show_scan_qual(((BitmapHeapScan*)plan)->bitmapqualorig, "Recheck Cond", planstate, ancestors, es);
-            if (((BitmapHeapScan*)plan)->bitmapqualorig)
+            show_scan_qual(((BitmapHeapScan *)plan)->bitmapqualorig, "Recheck Cond", planstate, ancestors, es);
+            if (((BitmapHeapScan *)plan)->bitmapqualorig)
                 show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
 
             show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
             if (nodeTag(plan) == T_BitmapHeapScan && es->analyze) {
-                show_tidbitmap_info((BitmapHeapScanState*)planstate, es);
+                show_tidbitmap_info((BitmapHeapScanState *)planstate, es);
             }
             show_llvm_info(planstate, es);
             break;
         case T_StartWithOp:
             show_startwith_pseudo_entries(planstate, ancestors, es);
-            show_startwith_dfx((StartWithOpState*)planstate, es);
+            show_startwith_dfx((StartWithOpState *)planstate, es);
             break;
         case T_SeqScan:
 #ifdef USE_SPQ
         case T_SpqSeqScan:
 #endif
             show_tablesample(plan, planstate, ancestors, es);
-            if (!((SeqScan*)plan)->scanBatchMode) {
+            if (!((SeqScan *)plan)->scanBatchMode) {
                 show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
                 if (plan->qual) {
                     show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
@@ -2799,7 +3103,7 @@ static void ExplainNode(
         case T_CStoreScan:
 #ifdef ENABLE_MULTIPLE_NODES
         case T_TsStoreScan:
-#endif   /* ENABLE_MULTIPLE_NODES */
+#endif /* ENABLE_MULTIPLE_NODES */
         case T_ValuesScan:
         case T_CteScan:
         case T_WorkTableScan:
@@ -2816,15 +3120,15 @@ static void ExplainNode(
         case T_Stream:
         case T_VecStream: {
             show_merge_sort_keys(planstate, ancestors, es);
-            ShowStreamRunNodeInfo((Stream*)plan, es);
+            ShowStreamRunNodeInfo((Stream *)plan, es);
             if (is_pretty && es->planinfo->m_query_summary) {
-                showStreamnetwork((Stream*)plan, es);
+                showStreamnetwork((Stream *)plan, es);
             }
         } break;
         case T_FunctionScan:
             if (es->verbose)
-                show_expression(
-                    ((FunctionScan*)plan)->funcexpr, "Function Call", planstate, ancestors, es->verbose, es);
+                show_expression(((FunctionScan *)plan)->funcexpr, "Function Call", planstate, ancestors, es->verbose,
+                                es);
             show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
@@ -2834,7 +3138,7 @@ static void ExplainNode(
              * The tidquals list has OR semantics, so be sure to show it
              * as an OR condition.
              */
-            List* tidquals = ((TidScan*)plan)->tidquals;
+            List *tidquals = ((TidScan *)plan)->tidquals;
 
             if (list_length(tidquals) > 1)
                 tidquals = list_make1(make_orclause(tidquals));
@@ -2845,17 +3149,17 @@ static void ExplainNode(
         } break;
         case T_ForeignScan:
         case T_VecForeignScan: {
-            ForeignScan* fScan = (ForeignScan*)plan;
+            ForeignScan *fScan = (ForeignScan *)plan;
             /*
              * show_predicate_flag represents the label of non-pushdown
              * predicate restriction clause on foreign scan level.
              */
-            char* show_predicate_flag = NULL;
+            char *show_predicate_flag = NULL;
             /*
              * show_pushdown_flag represents the label of pushdown predicate
              * restriction clause on ORC reader level.
              */
-            char* show_pushdown_flag = NULL;
+            char *show_pushdown_flag = NULL;
             if (fScan->scan.scan_qual_optimized) {
                 show_predicate_flag = FILTER_INFORMATIONAL_CONSTRAINT_FLAG;
             } else {
@@ -2873,7 +3177,7 @@ static void ExplainNode(
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
             if (es->wlm_statistics_plan_max_digit == NULL) {
-                show_foreignscan_info((ForeignScanState*)planstate, es);
+                show_foreignscan_info((ForeignScanState *)planstate, es);
             }
             show_storage_filter_info(planstate, es);
             show_llvm_info(planstate, es);
@@ -2884,17 +3188,14 @@ static void ExplainNode(
         } break;
         case T_VecNestLoop:
         case T_NestLoop: {
-            NestLoop* nestLoop = (NestLoop*)plan;
+            NestLoop *nestLoop = (NestLoop *)plan;
             if (nestLoop->join.optimizable) {
-                show_upper_qual(((NestLoop*)plan)->join.joinqual,
-                    "Join Filter(Informational Constraint Optimization)",
-                    planstate,
-                    ancestors,
-                    es);
+                show_upper_qual(((NestLoop *)plan)->join.joinqual, "Join Filter(Informational Constraint Optimization)",
+                                planstate, ancestors, es);
             } else {
-                show_upper_qual(((NestLoop*)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+                show_upper_qual(((NestLoop *)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
             }
-            if (((NestLoop*)plan)->join.joinqual)
+            if (((NestLoop *)plan)->join.joinqual)
                 show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
@@ -2904,18 +3205,15 @@ static void ExplainNode(
         } break;
         case T_VecMergeJoin:
         case T_MergeJoin: {
-            MergeJoin* mergeJoin = (MergeJoin*)plan;
+            MergeJoin *mergeJoin = (MergeJoin *)plan;
             if (mergeJoin->join.optimizable) {
-                show_upper_qual(((MergeJoin*)plan)->mergeclauses,
-                    "Merge Cond(Informational Constraint Optimization)",
-                    planstate,
-                    ancestors,
-                    es);
+                show_upper_qual(((MergeJoin *)plan)->mergeclauses, "Merge Cond(Informational Constraint Optimization)",
+                                planstate, ancestors, es);
             } else {
-                show_upper_qual(((MergeJoin*)plan)->mergeclauses, "Merge Cond", planstate, ancestors, es);
+                show_upper_qual(((MergeJoin *)plan)->mergeclauses, "Merge Cond", planstate, ancestors, es);
             }
-            show_upper_qual(((MergeJoin*)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
-            if (((MergeJoin*)plan)->join.joinqual)
+            show_upper_qual(((MergeJoin *)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+            if (((MergeJoin *)plan)->join.joinqual)
                 show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
@@ -2924,9 +3222,9 @@ static void ExplainNode(
             show_skew_optimization(planstate, es);
         } break;
         case T_HashJoin: {
-            show_upper_qual(((HashJoin*)plan)->hashclauses, "Hash Cond", planstate, ancestors, es);
-            show_upper_qual(((HashJoin*)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
-            if (((HashJoin*)plan)->join.joinqual)
+            show_upper_qual(((HashJoin *)plan)->hashclauses, "Hash Cond", planstate, ancestors, es);
+            show_upper_qual(((HashJoin *)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+            if (((HashJoin *)plan)->join.joinqual)
                 show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
@@ -2934,25 +3232,25 @@ static void ExplainNode(
             show_skew_optimization(planstate, es);
         } break;
         case T_VecHashJoin: {
-            show_upper_qual(((HashJoin*)plan)->hashclauses, "Hash Cond", planstate, ancestors, es);
-            show_upper_qual(((HashJoin*)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+            show_upper_qual(((HashJoin *)plan)->hashclauses, "Hash Cond", planstate, ancestors, es);
+            show_upper_qual(((HashJoin *)plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             show_llvm_info(planstate, es);
 
             show_bloomfilter<true>(plan, planstate, ancestors, es);
             show_skew_optimization(planstate, es);
         }
-            show_vechash_info((VecHashJoinState*)planstate, es);
+            show_vechash_info((VecHashJoinState *)planstate, es);
             break;
         case T_VecAgg:
         case T_Agg:
-            show_groupby_keys((AggState*)planstate, ancestors, es);
+            show_groupby_keys((AggState *)planstate, ancestors, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-            switch (((Agg*)plan)->aggstrategy) {
+            switch (((Agg *)plan)->aggstrategy) {
                 case AGG_HASHED: {
-                    show_hashAgg_info((AggState*)planstate, es);
+                    show_hashAgg_info((AggState *)planstate, es);
                     show_llvm_info(planstate, es);
                 } break;
                 case AGG_SORTED: {
@@ -2966,15 +3264,15 @@ static void ExplainNode(
             break;
         case T_Group:
         case T_VecGroup:
-            show_group_keys((GroupState*)planstate, ancestors, es);
+            show_group_keys((GroupState *)planstate, ancestors, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
             break;
         case T_Sort:
         case T_VecSort:
-            show_sort_keys((SortState*)planstate, ancestors, es);
-            show_sort_info((SortState*)planstate, es);
+            show_sort_keys((SortState *)planstate, ancestors, es);
+            show_sort_info((SortState *)planstate, es);
             show_llvm_info(planstate, es);
             break;
         case T_SortGroup: {
@@ -2985,23 +3283,23 @@ static void ExplainNode(
             break;
         }
         case T_MergeAppend:
-            show_merge_append_keys((MergeAppendState*)planstate, ancestors, es);
+            show_merge_append_keys((MergeAppendState *)planstate, ancestors, es);
             break;
         case T_BaseResult:
         case T_VecResult:
-            show_upper_qual((List*)((BaseResult*)plan)->resconstantqual, "One-Time Filter", planstate, ancestors, es);
+            show_upper_qual((List *)((BaseResult *)plan)->resconstantqual, "One-Time Filter", planstate, ancestors, es);
             show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual)
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
             break;
         case T_Hash:
-            show_hash_info((HashState*)planstate, es);
+            show_hash_info((HashState *)planstate, es);
             break;
         case T_SetOp:
         case T_VecSetOp:
-            switch (((SetOp*)plan)->strategy) {
+            switch (((SetOp *)plan)->strategy) {
                 case SETOP_HASHED:
-                    show_setop_info((SetOpState*)planstate, es);
+                    show_setop_info((SetOpState *)planstate, es);
                     break;
                 default:
                     break;
@@ -3011,10 +3309,10 @@ static void ExplainNode(
             show_pushdown_qual(planstate, ancestors, es, PUSHDOWN_PREDICATE_FLAG);
             break;
         case T_RecursiveUnion:
-            show_recursive_info((RecursiveUnionState*)planstate, es);
+            show_recursive_info((RecursiveUnionState *)planstate, es);
             break;
         case T_RowToVec:
-            if (IsA(plan->lefttree, SeqScan) && ((SeqScan*)plan->lefttree)->scanBatchMode) {
+            if (IsA(plan->lefttree, SeqScan) && ((SeqScan *)plan->lefttree)->scanBatchMode) {
                 show_scan_qual(plan->lefttree->qual, "Filter", planstate, ancestors, es);
                 if (plan->lefttree->qual) {
                     show_instrumentation_count("Rows Removed by Filter", 1, planstate->lefttree, es);
@@ -3086,19 +3384,19 @@ static void ExplainNode(
 
         if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
             u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-            Instrumentation* instr = NULL;
+            Instrumentation *instr = NULL;
             if (es->detail) {
                 ExplainOpenGroup("Cpus In Detail", "Cpus In Detail", false, es);
                 int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
                 for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
 #ifdef ENABLE_MULTIPLE_NODES
-                    char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                    char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                    char* node_name = NULL;
+                    char *node_name = NULL;
                     if (!IS_SPQ_RUNNING) {
                         node_name = g_instance.exec_cxt.nodeName;
                     } else {
-                        node_name = (char*)palloc0(SPQNODENAMELEN);
+                        node_name = (char *)palloc0(SPQNODENAMELEN);
                         sprintf(node_name, "%d", i);
                     }
 #endif
@@ -3112,8 +3410,8 @@ static void ExplainNode(
                             continue;
                         append_datanode_name(es, node_name, dop, j);
 
-                        show_child_cpu_cycles_and_rows<true>(
-                            planstate, i, j, &outerCycles, &innerCycles, &outterRows, &innerRows);
+                        show_child_cpu_cycles_and_rows<true>(planstate, i, j, &outerCycles, &innerCycles, &outterRows,
+                                                             &innerRows);
                         if (es->planinfo != NULL && es->planinfo->m_runtimeinfo != NULL && instr != NULL &&
                             instr->nloops > 0) {
                             es->planinfo->m_datanodeInfo->set_plan_name<false, true>();
@@ -3132,7 +3430,7 @@ static void ExplainNode(
             } else
                 show_detail_cpu(es, planstate);
         } else if (!es->from_dn) {
-            const CPUUsage* usage = &planstate->instrument->cpuusage;
+            const CPUUsage *usage = &planstate->instrument->cpuusage;
 
             show_child_cpu_cycles_and_rows<false>(planstate, 0, 0, &outerCycles, &innerCycles, &outterRows, &innerRows);
 
@@ -3176,7 +3474,7 @@ static void ExplainNode(
         case T_CStoreScan:
 #ifdef ENABLE_MULTIPLE_NODES
         case T_TsStoreScan:
-#endif   /* ENABLE_MULTIPLE_NODES */
+#endif /* ENABLE_MULTIPLE_NODES */
 #ifdef USE_SPQ
         case T_SpqSeqScan:
         case T_SpqIndexScan:
@@ -3189,11 +3487,11 @@ static void ExplainNode(
         case T_CStoreIndexScan:
         case T_CStoreIndexHeapScan:
         case T_TidScan: {
-            if (((Scan*)plan)->isPartTbl) {
+            if (((Scan *)plan)->isPartTbl) {
                 show_pruning_info(planstate, es, is_pretty);
             }
 
-            if (es->verbose && ((Scan*)plan)->bucketInfo != NULL) {
+            if (es->verbose && ((Scan *)plan)->bucketInfo != NULL) {
                 show_bucket_info(planstate, es, is_pretty);
             }
         } break;
@@ -3218,12 +3516,12 @@ static void ExplainNode(
                 } else {
 
                     es->planinfo->m_detailInfo->set_plan_name<true, true>();
-                    appendStringInfo(
-                        es->planinfo->m_detailInfo->info_str, "Iterations: %d", ((PartIterator*)plan)->itrs);
+                    appendStringInfo(es->planinfo->m_detailInfo->info_str, "Iterations: %d",
+                                     ((PartIterator *)plan)->itrs);
                     appendStringInfoChar(es->planinfo->m_detailInfo->info_str, '\n');
                 }
             } else {
-                ExplainPropertyInteger("Iterations", ((PartIterator*)plan)->itrs, es);
+                ExplainPropertyInteger("Iterations", ((PartIterator *)plan)->itrs, es);
                 int subPartCnt = 0;
                 if (GetSubPartitionIterations(plan, es, &subPartCnt)) {
                     ExplainPropertyInteger("Sub Iterations", subPartCnt, es);
@@ -3242,7 +3540,7 @@ runnext:
                   IsA(plan, ModifyTable) || IsA(plan, VecModifyTable) || IsA(plan, Append) || IsA(plan, VecAppend) ||
                   IsA(plan, MergeAppend) || IsA(plan, VecMergeAppend) || IsA(plan, BitmapAnd) || IsA(plan, BitmapOr) ||
                   IsA(plan, SubqueryScan) || IsA(plan, VecSubqueryScan) ||
-                  (IsA(planstate, ExtensiblePlanState) && ((ExtensiblePlanState*)planstate)->extensible_ps != NIL) ||
+                  (IsA(planstate, ExtensiblePlanState) && ((ExtensiblePlanState *)planstate)->extensible_ps != NIL) ||
                   planstate->subPlan;
     if (haschildren) {
         ExplainOpenGroup("Plans", "Plans", false, es);
@@ -3256,7 +3554,7 @@ runnext:
 
     /* Cte distributed support */
     if (IS_STREAM_PLAN && IsA(plan, CteScan)) {
-        CteScanState* css = (CteScanState*)planstate;
+        CteScanState *css = (CteScanState *)planstate;
 
         if (css->cteplanstate) {
             ExplainNode<is_pretty>(css->cteplanstate, ancestors, "CTE Sub", NULL, es);
@@ -3287,41 +3585,42 @@ runnext:
     switch (nodeTag(plan)) {
         case T_ModifyTable:
         case T_VecModifyTable:
-            ExplainMemberNodes(((ModifyTable*)plan)->plans, ((ModifyTableState*)planstate)->mt_plans, ancestors, es);
+            ExplainMemberNodes(((ModifyTable *)plan)->plans, ((ModifyTableState *)planstate)->mt_plans, ancestors, es);
             break;
         case T_VecAppend:
         case T_Append:
-            ExplainMemberNodes(((Append*)plan)->appendplans, ((AppendState*)planstate)->appendplans, ancestors, es);
+            ExplainMemberNodes(((Append *)plan)->appendplans, ((AppendState *)planstate)->appendplans, ancestors, es);
             break;
         case T_MergeAppend:
-            ExplainMemberNodes(
-                ((MergeAppend*)plan)->mergeplans, ((MergeAppendState*)planstate)->mergeplans, ancestors, es);
+            ExplainMemberNodes(((MergeAppend *)plan)->mergeplans, ((MergeAppendState *)planstate)->mergeplans,
+                               ancestors, es);
             break;
         case T_BitmapAnd:
-            ExplainMemberNodes(
-                ((BitmapAnd*)plan)->bitmapplans, ((BitmapAndState*)planstate)->bitmapplans, ancestors, es);
+            ExplainMemberNodes(((BitmapAnd *)plan)->bitmapplans, ((BitmapAndState *)planstate)->bitmapplans, ancestors,
+                               es);
             break;
         case T_BitmapOr:
-            ExplainMemberNodes(((BitmapOr*)plan)->bitmapplans, ((BitmapOrState*)planstate)->bitmapplans, ancestors, es);
+            ExplainMemberNodes(((BitmapOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans, ancestors,
+                               es);
             break;
         case T_CStoreIndexAnd:
-            ExplainMemberNodes(
-                ((CStoreIndexAnd*)plan)->bitmapplans, ((BitmapAndState*)planstate)->bitmapplans, ancestors, es);
+            ExplainMemberNodes(((CStoreIndexAnd *)plan)->bitmapplans, ((BitmapAndState *)planstate)->bitmapplans,
+                               ancestors, es);
             break;
         case T_CStoreIndexOr:
-            ExplainMemberNodes(
-                ((CStoreIndexOr*)plan)->bitmapplans, ((BitmapOrState*)planstate)->bitmapplans, ancestors, es);
+            ExplainMemberNodes(((CStoreIndexOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans,
+                               ancestors, es);
             break;
         case T_SubqueryScan:
         case T_VecSubqueryScan:
-            ExplainNode<is_pretty>(((SubqueryScanState*)planstate)->subplan, ancestors, "Subquery", NULL, es);
+            ExplainNode<is_pretty>(((SubqueryScanState *)planstate)->subplan, ancestors, "Subquery", NULL, es);
             break;
         case T_ExtensiblePlan:
-            ExplainExtensibleChildren((ExtensiblePlanState*)planstate, ancestors, es);
+            ExplainExtensibleChildren((ExtensiblePlanState *)planstate, ancestors, es);
             break;
 #ifdef USE_SPQ
         case T_Sequence:
-            ExplainMemberNodes(((Sequence*)plan)->subplans, ((SequenceState*)planstate)->subplans, ancestors, es);
+            ExplainMemberNodes(((Sequence *)plan)->subplans, ((SequenceState *)planstate)->subplans, ancestors, es);
             break;
 #endif
         default:
@@ -3358,9 +3657,9 @@ runnext:
             GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
 
             /* Step 3: Set object_type for plan table. */
-            RangeTblEntry* rte = (RangeTblEntry*)llast(es->rtable);
-            char* objectname = rte->relname;
-            const char* object_type = "REMOTE_QUERY";
+            RangeTblEntry *rte = (RangeTblEntry *)llast(es->rtable);
+            char *objectname = rte->relname;
+            const char *object_type = "REMOTE_QUERY";
             es->planinfo->m_planTableData->set_plan_table_objs(plan->plan_node_id, objectname, object_type, NULL);
 
             /* Step 4: Set projection for plan table. */
@@ -3378,8 +3677,8 @@ runnext:
          * ExplainNode.
          */
         if (strcmp(pt_operation, "INDEX") == 0 && pt_index_name != NULL && pt_index_owner != NULL)
-            es->planinfo->m_planTableData->set_plan_table_objs(
-                planstate->plan->plan_node_id, pt_index_name, pt_operation, pt_index_owner);
+            es->planinfo->m_planTableData->set_plan_table_objs(planstate->plan->plan_node_id, pt_index_name,
+                                                               pt_operation, pt_index_owner);
 
         /* 4. set cost and cardinality */
         es->planinfo->m_planTableData->set_plan_table_cost_card(plan->plan_node_id, plan->total_cost, plan->plan_rows);
@@ -3404,14 +3703,14 @@ runnext:
  * @param (out) processedrows:
  *		the processed tuple number for the current node.
  */
-static void CalculateProcessedRows(
-    PlanState* planstate, int idx, int smpIdx, const uint64* inner_rows, const uint64* outter_rows, uint64* processed_rows)
+static void CalculateProcessedRows(PlanState *planstate, int idx, int smpIdx, const uint64 *inner_rows,
+                                   const uint64 *outter_rows, uint64 *processed_rows)
 {
     int removed_rows = 0;
-    Plan* plan = planstate->plan;
+    Plan *plan = planstate->plan;
     switch (nodeTag(plan)) {
         case T_SeqScan:
-            if (!((SeqScan*)plan)->scanBatchMode) {
+            if (!((SeqScan *)plan)->scanBatchMode) {
                 show_removed_rows(1, planstate, idx, smpIdx, &removed_rows);
                 *processed_rows += removed_rows;
             }
@@ -3419,7 +3718,7 @@ static void CalculateProcessedRows(
         case T_CStoreScan:
 #ifdef ENABLE_MULTIPLE_NODES
         case T_TsStoreScan:
-#endif   /* ENABLE_MULTIPLE_NODES */
+#endif /* ENABLE_MULTIPLE_NODES */
         case T_NestLoop:
         case T_VecNestLoop:
         case T_VecMergeJoin:
@@ -3452,9 +3751,9 @@ static void CalculateProcessedRows(
  *
  * @return: void
  */
-static void show_plan_execnodes(PlanState* planstate, ExplainState* es)
+static void show_plan_execnodes(PlanState *planstate, ExplainState *es)
 {
-    Plan* plan = planstate->plan;
+    Plan *plan = planstate->plan;
 
     if (IsA(plan, Stream) || IsA(plan, VecStream) || IsA(plan, ModifyTable) || IsA(plan, VecModifyTable) ||
         IsA(plan, RemoteQuery) || IsA(plan, VecRemoteQuery) || u_sess->pgxc_cxt.NumDataNodes == 0) {
@@ -3468,13 +3767,13 @@ static void show_plan_execnodes(PlanState* planstate, ExplainState* es)
 /*
  * Show the targetlist of a plan node
  */
-static void show_plan_tlist(PlanState* planstate, List* ancestors, ExplainState* es)
+static void show_plan_tlist(PlanState *planstate, List *ancestors, ExplainState *es)
 {
-    Plan* plan = planstate->plan;
-    List* context = NIL;
-    List* result = NIL;
+    Plan *plan = planstate->plan;
+    List *context = NIL;
+    List *result = NIL;
     bool useprefix = false;
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
 
     /* No work if empty tlist (this occurs eg in bitmap indexscans) */
     if (plan->targetlist == NIL)
@@ -3489,25 +3788,25 @@ static void show_plan_tlist(PlanState* planstate, List* ancestors, ExplainState*
         return;
 
     /* Set up deparsing context */
-    context = deparse_context_for_planstate((Node*)planstate, ancestors, es->rtable);
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, es->rtable);
     useprefix = list_length(es->rtable) > 1;
 
     /* Deparse each result column (we now include resjunk ones) */
     foreach (lc, plan->targetlist) {
-        TargetEntry* tle = (TargetEntry*)lfirst(lc);
+        TargetEntry *tle = (TargetEntry *)lfirst(lc);
 
         /* skip pseudo columns once startwith exist */
         if (IsPseudoReturnTargetEntry(tle) || IsPseudoInternalTargetEntry(tle)) {
             continue;
         }
 
-        result = lappend(result, deparse_expression((Node*)tle->expr, context, useprefix, false));
+        result = lappend(result, deparse_expression((Node *)tle->expr, context, useprefix, false));
     }
 
     if (IsA(plan, ForeignScan) || IsA(plan, VecForeignScan)) {
-        ForeignScan* fscan = (ForeignScan*)plan;
+        ForeignScan *fscan = (ForeignScan *)plan;
         if (OidIsValid(fscan->scan_relid) && IsSpecifiedFDWFromRelid(fscan->scan_relid, GC_FDW)) {
-            List* str_targetlist = get_str_targetlist(fscan->fdw_private);
+            List *str_targetlist = get_str_targetlist(fscan->fdw_private);
             if (str_targetlist != NULL)
                 result = str_targetlist;
         }
@@ -3528,12 +3827,12 @@ static void show_plan_tlist(PlanState* planstate, List* ancestors, ExplainState*
 #ifdef ENABLE_MULTIPLE_NODES
     /* show distributeKey of scan */
     if (plan->distributed_keys != NIL && show_scan_distributekey(plan)) {
-        List* distKey = NIL;
-        List* keyList = NIL;
+        List *distKey = NIL;
+        List *keyList = NIL;
         keyList = plan->distributed_keys;
         foreach (lc, keyList) {
-            Var* distriVar = (Var*)lfirst(lc);
-            distKey = lappend(distKey, deparse_expression((Node*)distriVar, context, useprefix, false));
+            Var *distriVar = (Var *)lfirst(lc);
+            distKey = lappend(distKey, deparse_expression((Node *)distriVar, context, useprefix, false));
         }
 
         ExplainPropertyList("Distribute Key", distKey, es);
@@ -3547,14 +3846,14 @@ static void show_plan_tlist(PlanState* planstate, List* ancestors, ExplainState*
 #endif
 #ifdef STREAMPLAN
     if ((IsA(plan, Stream) || IsA(plan, VecStream)) &&
-        (is_redistribute_stream((Stream*)plan) || is_hybid_stream((Stream*)plan)) &&
-        ((Stream*)plan)->distribute_keys != NIL) {
-        List* distKey = NIL;
-        List* keyList = NIL;
-        keyList = ((Stream*)plan)->distribute_keys;
+        (is_redistribute_stream((Stream *)plan) || is_hybid_stream((Stream *)plan)) &&
+        ((Stream *)plan)->distribute_keys != NIL) {
+        List *distKey = NIL;
+        List *keyList = NIL;
+        keyList = ((Stream *)plan)->distribute_keys;
         foreach (lc, keyList) {
-            Var* distriVar = (Var*)lfirst(lc);
-            distKey = lappend(distKey, deparse_expression((Node*)distriVar, context, useprefix, false));
+            Var *distriVar = (Var *)lfirst(lc);
+            distKey = lappend(distKey, deparse_expression((Node *)distriVar, context, useprefix, false));
         }
 
         ExplainPropertyList("Distribute Key", distKey, es);
@@ -3577,14 +3876,14 @@ static void show_plan_tlist(PlanState* planstate, List* ancestors, ExplainState*
  * @param (in)unused_info: do not use this infor
  * @return: Find row level security policy in this RangeTblEntry or not
  */
-static bool ContainRlsQualInRteWalker(Node* node, void* unused_info)
+static bool ContainRlsQualInRteWalker(Node *node, void *unused_info)
 {
     if (node == NULL) {
         return false;
     }
     /* Check range table entry */
     if (IsA(node, RangeTblEntry)) {
-        RangeTblEntry* rte = (RangeTblEntry*)node;
+        RangeTblEntry *rte = (RangeTblEntry *)node;
         if ((rte->rtekind == RTE_RELATION) && (rte->securityQuals != NIL)) {
             return true;
         }
@@ -3594,10 +3893,8 @@ static bool ContainRlsQualInRteWalker(Node* node, void* unused_info)
     /* Check Query */
     if (IsA(node, Query)) {
         /* Check RTE and skip remote dummy node */
-        return range_table_walker(((Query*)node)->rtable,
-            (bool (*)())ContainRlsQualInRteWalker,
-            unused_info,
-            QTW_EXAMINE_RTES | QTW_IGNORE_DUMMY);
+        return range_table_walker(((Query *)node)->rtable, (bool (*)())ContainRlsQualInRteWalker, unused_info,
+                                  QTW_EXAMINE_RTES | QTW_IGNORE_DUMMY);
     }
     return expression_tree_walker(node, (bool (*)())ContainRlsQualInRteWalker, unused_info);
 }
@@ -3605,14 +3902,14 @@ static bool ContainRlsQualInRteWalker(Node* node, void* unused_info)
 /*
  * Show a generic expression
  */
-static void show_expression(
-    Node* node, const char* qlabel, PlanState* planstate, List* ancestors, bool useprefix, ExplainState* es)
+static void show_expression(Node *node, const char *qlabel, PlanState *planstate, List *ancestors, bool useprefix,
+                            ExplainState *es)
 {
-    List* context = NIL;
-    char* exprstr = NULL;
+    List *context = NIL;
+    char *exprstr = NULL;
 
     /* Set up deparsing context */
-    context = deparse_context_for_planstate((Node*)planstate, ancestors, es->rtable);
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, es->rtable);
 
     /* Deparse the expression */
     exprstr = deparse_expression(node, context, useprefix, false);
@@ -3629,17 +3926,17 @@ static void show_expression(
 /*
  * Show a qualifier expression (which is a List with implicit AND semantics)
  */
-static void show_qual(
-    List* qual, const char* qlabel, PlanState* planstate, List* ancestors, bool useprefix, ExplainState* es)
+static void show_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, bool useprefix,
+                      ExplainState *es)
 {
-    Node* node = NULL;
+    Node *node = NULL;
 
     /* No work if empty qual */
     if (qual == NIL)
         return;
 
     /* Convert AND list to explicit AND */
-    node = (Node*)make_ands_explicit(qual);
+    node = (Node *)make_ands_explicit(qual);
 
     /* And show it */
     show_expression(node, qlabel, planstate, ancestors, useprefix, es);
@@ -3649,7 +3946,7 @@ static void show_qual(
  * Show a qualifier expression for a scan plan node
  */
 static void show_scan_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, ExplainState *es,
-    bool show_prefix)
+                           bool show_prefix)
 {
     bool useprefix = false;
 
@@ -3664,7 +3961,7 @@ static void show_scan_qual(List *qual, const char *qlabel, PlanState *planstate,
  * @in es: Explain state.
  */
 template <bool generate>
-static void show_bloomfilter_number(const List* filterNumList, ExplainState* es)
+static void show_bloomfilter_number(const List *filterNumList, ExplainState *es)
 {
     if (filterNumList != NULL) {
         StringInfo str = NULL;
@@ -3672,7 +3969,7 @@ static void show_bloomfilter_number(const List* filterNumList, ExplainState* es)
         initStringInfo(&index_info);
         bool first = true;
 
-        ListCell* l = NULL;
+        ListCell *l = NULL;
         foreach (l, filterNumList) {
             if (first) {
                 appendStringInfo(&index_info, "%d", lfirst_int(l));
@@ -3719,13 +4016,13 @@ static void show_bloomfilter_number(const List* filterNumList, ExplainState* es)
  * @in es: Explain state.
  */
 template <bool generate>
-static void show_bloomfilter(Plan* plan, PlanState* planstate, List* ancestors, ExplainState* es)
+static void show_bloomfilter(Plan *plan, PlanState *planstate, List *ancestors, ExplainState *es)
 {
     if (plan->var_list) {
         if (generate) {
-            show_expression((Node*)plan->var_list, "Generate Bloom Filter On Expr", planstate, ancestors, true, es);
+            show_expression((Node *)plan->var_list, "Generate Bloom Filter On Expr", planstate, ancestors, true, es);
         } else {
-            show_expression((Node*)plan->var_list, "Filter By Bloom Filter On Expr", planstate, ancestors, true, es);
+            show_expression((Node *)plan->var_list, "Filter By Bloom Filter On Expr", planstate, ancestors, true, es);
         }
 
         /* Show bloom filter numbers. */
@@ -3733,11 +4030,11 @@ static void show_bloomfilter(Plan* plan, PlanState* planstate, List* ancestors, 
     }
 }
 
-static void show_skew_optimization(const PlanState* planstate, ExplainState* es)
+static void show_skew_optimization(const PlanState *planstate, ExplainState *es)
 {
 #ifdef ENABLE_MULTIPLE_NODES
     int skew_opt = SKEW_RES_NONE;
-    char* skew_txt = NULL;
+    char *skew_txt = NULL;
 
     switch (planstate->plan->type) {
         case T_NestLoop:
@@ -3746,12 +4043,12 @@ static void show_skew_optimization(const PlanState* planstate, ExplainState* es)
         case T_VecHashJoin:
         case T_MergeJoin:
         case T_VecMergeJoin:
-            skew_opt = ((Join*)planstate->plan)->skewoptimize;
+            skew_opt = ((Join *)planstate->plan)->skewoptimize;
             skew_txt = "Skew Join Optimized";
             break;
         case T_Agg:
         case T_VecAgg:
-            skew_opt = ((Agg*)planstate->plan)->skew_optimize;
+            skew_opt = ((Agg *)planstate->plan)->skew_optimize;
             skew_txt = "Skew Agg Optimized";
             break;
         default:
@@ -3788,19 +4085,13 @@ static void show_skew_optimization(const PlanState* planstate, ExplainState* es)
         /* For skew agg, we add node info before print skew info in pretty mode. */
         if (planstate->plan->type == T_Agg || planstate->plan->type == T_VecAgg) {
             StringInfo agg_node_des = makeStringInfo();
-            int rc = snprintf_s(agg_node_des->data,
-                agg_node_des->maxlen,
-                agg_node_des->maxlen - 1,
-                "%3d --%s",
-                planstate->plan->plan_node_id,
-                es->planinfo->m_planInfo->m_pname.data);
+            int rc = snprintf_s(agg_node_des->data, agg_node_des->maxlen, agg_node_des->maxlen - 1, "%3d --%s",
+                                planstate->plan->plan_node_id, es->planinfo->m_planInfo->m_pname.data);
             securec_check_ss(rc, "\0", "\0");
 
             if (strstr(es->planinfo->m_detailInfo->info_str->data, agg_node_des->data) == NULL)
-                appendStringInfo(es->planinfo->m_detailInfo->info_str,
-                    "%3d --%s\n",
-                    planstate->plan->plan_node_id,
-                    es->planinfo->m_planInfo->m_pname.data);
+                appendStringInfo(es->planinfo->m_detailInfo->info_str, "%3d --%s\n", planstate->plan->plan_node_id,
+                                 es->planinfo->m_planInfo->m_pname.data);
         }
 
         appendStringInfoSpaces(es->planinfo->m_detailInfo->info_str, 8);
@@ -3821,9 +4112,9 @@ static void show_skew_optimization(const PlanState* planstate, ExplainState* es)
 /**
  * @Description: Show pushdown quals in the flag identifier.
  */
-static void show_pushdown_qual(PlanState* planstate, List* ancestors, ExplainState* es, const char* identifier)
+static void show_pushdown_qual(PlanState *planstate, List *ancestors, ExplainState *es, const char *identifier)
 {
-    Plan* plan = planstate->plan;
+    Plan *plan = planstate->plan;
 
     switch (nodeTag(plan)) {
         case T_ForeignScan:
@@ -3832,16 +4123,16 @@ static void show_pushdown_qual(PlanState* planstate, List* ancestors, ExplainSta
              * Only the HDFS foreign plan has pushdown predicate feature,
              * So show the pushdown predicate filter on HDFS foreign plan.
              */
-            if (((ForeignScanState*)planstate)->fdwroutine->GetFdwType != NULL &&
-                ((ForeignScanState*)planstate)->fdwroutine->GetFdwType() == HDFS_ORC) {
-                DefElem* private_data = (DefElem*)linitial(((ForeignScan*)plan)->fdw_private);
-                DfsPrivateItem* item = (DfsPrivateItem*)private_data->arg;
+            if (((ForeignScanState *)planstate)->fdwroutine->GetFdwType != NULL &&
+                ((ForeignScanState *)planstate)->fdwroutine->GetFdwType() == HDFS_ORC) {
+                DefElem *private_data = (DefElem *)linitial(((ForeignScan *)plan)->fdw_private);
+                DfsPrivateItem *item = (DfsPrivateItem *)private_data->arg;
                 show_scan_qual(item->hdfsQual, identifier, planstate, ancestors, es);
             }
             break;
         }
         case T_ExtensiblePlan: {
-            ExtensiblePlanState* css = (ExtensiblePlanState*)planstate;
+            ExtensiblePlanState *css = (ExtensiblePlanState *)planstate;
             show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
             if (plan->qual) {
                 show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
@@ -3863,7 +4154,7 @@ static void show_pushdown_qual(PlanState* planstate, List* ancestors, ExplainSta
 /*
  * Show a qualifier expression for an upper-level plan node
  */
-static void show_upper_qual(List* qual, const char* qlabel, PlanState* planstate, List* ancestors, ExplainState* es)
+static void show_upper_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, ExplainState *es)
 {
     bool useprefix = false;
 
@@ -3879,7 +4170,7 @@ static void show_upper_qual(List* qual, const char* qlabel, PlanState* planstate
  * @in j: current dop index
  * @out: return void
  */
-static void append_datanode_name(ExplainState* es, char* node_name, int dop, int j)
+static void append_datanode_name(ExplainState *es, char *node_name, int dop, int j)
 {
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         appendStringInfoSpaces(es->str, es->indent * 2);
@@ -3900,9 +4191,9 @@ static void append_datanode_name(ExplainState* es, char* node_name, int dop, int
 /*
  * Show the group by keys for a Agg node.
  */
-static void show_groupby_keys(AggState* aggstate, List* ancestors, ExplainState* es)
+static void show_groupby_keys(AggState *aggstate, List *ancestors, ExplainState *es)
 {
-    Agg* plan = (Agg*)aggstate->ss.ps.plan;
+    Agg *plan = (Agg *)aggstate->ss.ps.plan;
 
     if (plan->numCols > 0 || plan->groupingSets) {
         /* The key columns refer to the tlist of the child plan */
@@ -3911,28 +4202,21 @@ static void show_groupby_keys(AggState* aggstate, List* ancestors, ExplainState*
         if (plan->groupingSets)
             show_grouping_sets(outerPlanState(aggstate), plan, ancestors, es);
         else
-            show_sort_group_keys(outerPlanState(aggstate),
-                "Group By Key",
-                plan->numCols,
-                plan->grpColIdx,
-                NULL,
-                NULL,
-                NULL,
-                ancestors,
-                es);
+            show_sort_group_keys(outerPlanState(aggstate), "Group By Key", plan->numCols, plan->grpColIdx, NULL, NULL,
+                                 NULL, ancestors, es);
 
         ancestors = list_delete_first(ancestors);
     }
 }
 
-static void show_grouping_sets(PlanState* planstate, Agg* agg, List* ancestors, ExplainState* es)
+static void show_grouping_sets(PlanState *planstate, Agg *agg, List *ancestors, ExplainState *es)
 {
-    List* context = NIL;
+    List *context = NIL;
     bool useprefix = false;
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
 
     /* Set up deparsing context */
-    context = deparse_context_for_planstate((Node*)planstate, ancestors, es->rtable);
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, es->rtable);
 
     useprefix = (list_length(es->rtable) > 1 || es->verbose);
 
@@ -3941,8 +4225,8 @@ static void show_grouping_sets(PlanState* planstate, Agg* agg, List* ancestors, 
     show_grouping_set_keys(planstate, agg, NULL, context, useprefix, ancestors, es);
 
     foreach (lc, agg->chain) {
-        Agg* aggnode = (Agg*)lfirst(lc);
-        Sort* sortnode = (Sort*)aggnode->plan.lefttree;
+        Agg *aggnode = (Agg *)lfirst(lc);
+        Sort *sortnode = (Sort *)aggnode->plan.lefttree;
 
         show_grouping_set_keys(planstate, aggnode, sortnode, context, useprefix, ancestors, es);
     }
@@ -3950,27 +4234,20 @@ static void show_grouping_sets(PlanState* planstate, Agg* agg, List* ancestors, 
     ExplainCloseGroup("Grouping Sets", "Grouping Sets", false, es);
 }
 
-static void show_grouping_set_keys(PlanState* planstate, Agg* aggnode, Sort* sortnode, List* context, bool useprefix,
-    List* ancestors, ExplainState* es)
+static void show_grouping_set_keys(PlanState *planstate, Agg *aggnode, Sort *sortnode, List *context, bool useprefix,
+                                   List *ancestors, ExplainState *es)
 {
-    Plan* plan = planstate->plan;
-    char* exprstr = NULL;
-    ListCell* lc = NULL;
-    List* gsets = aggnode->groupingSets;
-    AttrNumber* keycols = aggnode->grpColIdx;
+    Plan *plan = planstate->plan;
+    char *exprstr = NULL;
+    ListCell *lc = NULL;
+    List *gsets = aggnode->groupingSets;
+    AttrNumber *keycols = aggnode->grpColIdx;
 
     ExplainOpenGroup("Grouping Set", NULL, true, es);
 
     if (sortnode != NULL) {
-        show_sort_group_keys(planstate,
-            "Sort Key",
-            sortnode->numCols,
-            sortnode->sortColIdx,
-            sortnode->sortOperators,
-            sortnode->collations,
-            sortnode->nullsFirst,
-            ancestors,
-            es);
+        show_sort_group_keys(planstate, "Sort Key", sortnode->numCols, sortnode->sortColIdx, sortnode->sortOperators,
+                             sortnode->collations, sortnode->nullsFirst, ancestors, es);
         if (es->format == EXPLAIN_FORMAT_TEXT)
             es->indent++;
     }
@@ -3978,19 +4255,19 @@ static void show_grouping_set_keys(PlanState* planstate, Agg* aggnode, Sort* sor
     ExplainOpenGroup("Group Keys", "Group Keys", false, es);
 
     foreach (lc, gsets) {
-        List* result = NIL;
-        ListCell* lc2 = NULL;
+        List *result = NIL;
+        ListCell *lc2 = NULL;
 
-        foreach (lc2, (List*)lfirst(lc)) {
+        foreach (lc2, (List *)lfirst(lc)) {
             Index i = lfirst_int(lc2);
             AttrNumber keyresno = keycols[i];
-            TargetEntry* target = get_tle_by_resno(plan->targetlist, keyresno);
+            TargetEntry *target = get_tle_by_resno(plan->targetlist, keyresno);
 
             if (target == NULL)
                 ereport(ERROR,
-                    (errcode(ERRCODE_OPTIMIZER_INCONSISTENT_STATE), errmsg("no tlist entry for key %d", keyresno)));
+                        (errcode(ERRCODE_OPTIMIZER_INCONSISTENT_STATE), errmsg("no tlist entry for key %d", keyresno)));
             /* Deparse the expression, showing any top-level cast */
-            exprstr = deparse_expression((Node*)target->expr, context, useprefix, true);
+            exprstr = deparse_expression((Node *)target->expr, context, useprefix, true);
 
             result = lappend(result, exprstr);
         }
@@ -4016,86 +4293,65 @@ static void show_grouping_set_keys(PlanState* planstate, Agg* aggnode, Sort* sor
  * These are needed in order to interpret PARAM_EXEC Params.
  * @in es - explain state.
  */
-static void show_group_keys(GroupState* gstate, List* ancestors, ExplainState* es)
+static void show_group_keys(GroupState *gstate, List *ancestors, ExplainState *es)
 {
-    Group* plan = (Group*)gstate->ss.ps.plan;
+    Group *plan = (Group *)gstate->ss.ps.plan;
 
     /* The key columns refer to the tlist of the child plan */
     ancestors = lcons(gstate, ancestors);
-    show_sort_group_keys(
-        outerPlanState(gstate), "Group By Key", plan->numCols, plan->grpColIdx, NULL, NULL, NULL, ancestors, es);
+    show_sort_group_keys(outerPlanState(gstate), "Group By Key", plan->numCols, plan->grpColIdx, NULL, NULL, NULL,
+                         ancestors, es);
     ancestors = list_delete_first(ancestors);
 }
 
 /*
  * Show the sort keys for a Sort node.
  */
-static void show_sort_keys(SortState* sortstate, List* ancestors, ExplainState* es)
+static void show_sort_keys(SortState *sortstate, List *ancestors, ExplainState *es)
 {
-    Sort* plan = (Sort*)sortstate->ss.ps.plan;
+    Sort *plan = (Sort *)sortstate->ss.ps.plan;
 
-    show_sort_group_keys((PlanState*)sortstate,
-        "Sort Key",
-        plan->numCols,
-        plan->sortColIdx,
-        plan->sortOperators,
-        plan->collations,
-        plan->nullsFirst,
-        ancestors,
-        es);
+    show_sort_group_keys((PlanState *)sortstate, "Sort Key", plan->numCols, plan->sortColIdx, plan->sortOperators,
+                         plan->collations, plan->nullsFirst, ancestors, es);
 }
 
 /*
  * Likewise, for a MergeAppend node.
  */
-static void show_merge_append_keys(MergeAppendState* mstate, List* ancestors, ExplainState* es)
+static void show_merge_append_keys(MergeAppendState *mstate, List *ancestors, ExplainState *es)
 {
-    MergeAppend* plan = (MergeAppend*)mstate->ps.plan;
+    MergeAppend *plan = (MergeAppend *)mstate->ps.plan;
 
-    show_sort_group_keys((PlanState*)mstate,
-        "Sort Key",
-        plan->numCols,
-        plan->sortColIdx,
-        plan->sortOperators,
-        plan->collations,
-        plan->nullsFirst,
-        ancestors,
-        es);
+    show_sort_group_keys((PlanState *)mstate, "Sort Key", plan->numCols, plan->sortColIdx, plan->sortOperators,
+                         plan->collations, plan->nullsFirst, ancestors, es);
 }
 
 /*
  * Likewise, for a merge sort info of RemoteQuery or Broadcast node.
  */
-static void show_merge_sort_keys(PlanState* state, List* ancestors, ExplainState* es)
+static void show_merge_sort_keys(PlanState *state, List *ancestors, ExplainState *es)
 {
-    SimpleSort* sort = NULL;
-    Plan* plan = state->plan;
+    SimpleSort *sort = NULL;
+    Plan *plan = state->plan;
 
     if (IsA(plan, RemoteQuery) || IsA(plan, VecRemoteQuery))
-        sort = ((RemoteQuery*)plan)->sort;
+        sort = ((RemoteQuery *)plan)->sort;
     else if (IsA(plan, Stream) || IsA(plan, VecStream))
-        sort = ((Stream*)plan)->sort;
+        sort = ((Stream *)plan)->sort;
 
     /* No merge sort keys, just return */
     if (sort == NULL)
         return;
 
-    show_sort_group_keys((PlanState*)state,
-        "Merge Sort Key",
-        sort->numCols,
-        sort->sortColIdx,
-        sort->sortOperators,
-        sort->sortCollations,
-        sort->nullsFirst,
-        ancestors,
-        es);
+    show_sort_group_keys((PlanState *)state, "Merge Sort Key", sort->numCols, sort->sortColIdx, sort->sortOperators,
+                         sort->sortCollations, sort->nullsFirst, ancestors, es);
 }
 
-static void show_startwith_pseudo_entries(PlanState* state, List* ancestors, ExplainState* es)
+static void show_startwith_pseudo_entries(PlanState *state, List *ancestors, ExplainState *es)
 {
-    Plan* plan = state->plan;
+    Plan *plan = state->plan;
     StartWithOp *swplan = (StartWithOp *)plan;
-    List* result = NIL;
+    List *result = NIL;
     const char *qlabel = "Start With pseudo atts";
 
     ListCell *lc = NULL;
@@ -4117,7 +4373,7 @@ static void show_startwith_pseudo_entries(PlanState* state, List* ancestors, Exp
     list_free_deep(result);
 }
 
-static void show_detail_sortinfo(ExplainState* es, const char* sortMethod, const char* spaceType, long spaceUsed)
+static void show_detail_sortinfo(ExplainState *es, const char *sortMethod, const char *spaceType, long spaceUsed)
 {
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         appendStringInfo(es->str, "Sort Method: %s  %s: %ldkB\n", sortMethod, spaceType, spaceUsed);
@@ -4131,12 +4387,12 @@ static void show_detail_sortinfo(ExplainState* es, const char* sortMethod, const
 /*
  * show min and max sort info
  */
-static void show_detail_sortinfo_min_max(
-    ExplainState* es, const char* sortMethod, const char* spaceType, long minspaceUsed, long maxspaceUsed)
+static void show_detail_sortinfo_min_max(ExplainState *es, const char *sortMethod, const char *spaceType,
+                                         long minspaceUsed, long maxspaceUsed)
 {
     if (es->format == EXPLAIN_FORMAT_TEXT) {
-        appendStringInfo(
-            es->str, "Sort Method: %s  %s: %ldkB ~ %ldkB\n", sortMethod, spaceType, minspaceUsed, maxspaceUsed);
+        appendStringInfo(es->str, "Sort Method: %s  %s: %ldkB ~ %ldkB\n", sortMethod, spaceType, minspaceUsed,
+                         maxspaceUsed);
     } else {
         ExplainPropertyText("Sort Method", sortMethod, es);
         ExplainPropertyLong("Sort Space Min Used", minspaceUsed, es);
@@ -4151,10 +4407,10 @@ static void show_detail_sortinfo_min_max(
  * @in plan_size - current plan size
  * @out - void
  */
-static void show_peak_memory(ExplainState* es, int plan_size)
+static void show_peak_memory(ExplainState *es, int plan_size)
 {
     if (u_sess->instr_cxt.global_instr == NULL) {
-            elog(ERROR, "u_sess->instr_cxt.global_instr is NULL");
+        elog(ERROR, "u_sess->instr_cxt.global_instr is NULL");
     }
 
     bool from_datanode = false;
@@ -4166,13 +4422,13 @@ static void show_peak_memory(ExplainState* es, int plan_size)
 
         if (!last_datanode && from_datanode) {
             int64 peak_memory = (int64)(unsigned)((uint)(t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->peakChunksQuery -
-                                               t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->initMemInChunks)
-                                << (unsigned int)(chunkSizeInBits - BITS_IN_MB));
+                                                         t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->initMemInChunks)
+                                                  << (unsigned int)(chunkSizeInBits - BITS_IN_MB));
             appendStringInfo(es->planinfo->m_staticInfo->info_str, "Coordinator Query Peak Memory:\n");
             es->planinfo->m_staticInfo->set_plan_name<false, true>();
             appendStringInfo(es->planinfo->m_staticInfo->info_str, "Query Peak Memory: %ldMB\n", peak_memory);
 
-            Instrumentation* instr = NULL;
+            Instrumentation *instr = NULL;
             int64 max_peak_memory = -1;
             int64 min_peak_memory = LONG_MAX;
             bool is_execute = false;
@@ -4184,13 +4440,13 @@ static void show_peak_memory(ExplainState* es, int plan_size)
                 for (int k = 0; k < dop; k++) {
                     instr = u_sess->instr_cxt.global_instr->getInstrSlot(j, i + 1, k);
 #ifdef ENABLE_MULTIPLE_NODES
-                    char* node_name = PGXCNodeGetNodeNameFromId(j, PGXC_NODE_DATANODE);
+                    char *node_name = PGXCNodeGetNodeNameFromId(j, PGXC_NODE_DATANODE);
 #else
-                    char* node_name = NULL;
+                    char *node_name = NULL;
                     if (!IS_SPQ_RUNNING) {
                         node_name = g_instance.exec_cxt.nodeName;
                     } else {
-                        node_name = (char*)palloc0(SPQNODENAMELEN);
+                        node_name = (char *)palloc0(SPQNODENAMELEN);
                         sprintf(node_name, "%d", j);
                     }
 #endif
@@ -4202,8 +4458,8 @@ static void show_peak_memory(ExplainState* es, int plan_size)
 
                             es->planinfo->m_staticInfo->set_plan_name<false, true>();
                             appendStringInfo(es->planinfo->m_staticInfo->info_str, "%s ", node_name);
-                            appendStringInfo(
-                                es->planinfo->m_staticInfo->info_str, "Query Peak Memory: %ldMB\n", peak_memory);
+                            appendStringInfo(es->planinfo->m_staticInfo->info_str, "Query Peak Memory: %ldMB\n",
+                                             peak_memory);
                         } else {
                             max_peak_memory = rtl::max(max_peak_memory, instr->memoryinfo.peakNodeMemory);
                             min_peak_memory = rtl::min(min_peak_memory, instr->memoryinfo.peakNodeMemory);
@@ -4215,11 +4471,11 @@ static void show_peak_memory(ExplainState* es, int plan_size)
             if (is_execute && !es->detail) {
                 appendStringInfo(es->planinfo->m_staticInfo->info_str, "Datanode:\n");
                 es->planinfo->m_staticInfo->set_plan_name<false, true>();
-                appendStringInfo(
-                    es->planinfo->m_staticInfo->info_str, "Max Query Peak Memory: %ldMB\n", max_peak_memory);
+                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Max Query Peak Memory: %ldMB\n",
+                                 max_peak_memory);
                 es->planinfo->m_staticInfo->set_plan_name<false, true>();
-                appendStringInfo(
-                    es->planinfo->m_staticInfo->info_str, "Min Query Peak Memory: %ldMB\n", min_peak_memory);
+                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Min Query Peak Memory: %ldMB\n",
+                                 min_peak_memory);
             }
         }
 
@@ -4234,15 +4490,15 @@ static void show_peak_memory(ExplainState* es, int plan_size)
  * @in stage - the stage of executor time
  * @out - void
  */
-static void show_dn_executor_time(ExplainState* es, int plan_node_id, ExecutorTime stage)
+static void show_dn_executor_time(ExplainState *es, int plan_node_id, ExecutorTime stage)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     double min_time = 0;
     double max_time = 0;
     int min_idx = 0;
     int max_idx = 0;
     bool fisrt_time = true;
-    const char* symbol_time = "nostage";
+    const char *symbol_time = "nostage";
     int data_size = u_sess->instr_cxt.global_instr->getInstruNodeNum();
     for (int i = 0; i < data_size; i++) {
         double exec_time;
@@ -4282,39 +4538,40 @@ static void show_dn_executor_time(ExplainState* es, int plan_node_id, ExecutorTi
         }
     }
 #ifdef ENABLE_MULTIPLE_NODES
-    char* min_node_name = PGXCNodeGetNodeNameFromId(min_idx, PGXC_NODE_DATANODE);
-    char* max_node_name = PGXCNodeGetNodeNameFromId(max_idx, PGXC_NODE_DATANODE);
+    char *min_node_name = PGXCNodeGetNodeNameFromId(min_idx, PGXC_NODE_DATANODE);
+    char *max_node_name = PGXCNodeGetNodeNameFromId(max_idx, PGXC_NODE_DATANODE);
 #else
-    char* min_node_name = NULL;
-    char* max_node_name = NULL;
+    char *min_node_name = NULL;
+    char *max_node_name = NULL;
     if (!IS_SPQ_RUNNING) {
         min_node_name = g_instance.exec_cxt.nodeName;
         max_node_name = g_instance.exec_cxt.nodeName;
     } else {
-        min_node_name = (char*)palloc0(SPQNODENAMELEN);
-        max_node_name = (char*)palloc0(SPQNODENAMELEN);
+        min_node_name = (char *)palloc0(SPQNODENAMELEN);
+        max_node_name = (char *)palloc0(SPQNODENAMELEN);
         sprintf(min_node_name, "%d", min_idx);
         sprintf(max_node_name, "%d", max_idx);
     }
 #endif
 
-    appendStringInfo(es->planinfo->m_query_summary->info_str, "Datanode executor %s time [%s, %s]: [%.3f ms,%.3f ms]\n", symbol_time, min_node_name, max_node_name, min_time, max_time);
+    appendStringInfo(es->planinfo->m_query_summary->info_str, "Datanode executor %s time [%s, %s]: [%.3f ms,%.3f ms]\n",
+                     symbol_time, min_node_name, max_node_name, min_time, max_time);
 }
 
 /*
  * If it's EXPLAIN ANALYZE, show tuplesort stats for a sort node
  */
-static void show_sort_info(SortState* sortstate, ExplainState* es)
+static void show_sort_info(SortState *sortstate, ExplainState *es)
 {
-    PlanState* planstate = NULL;
-    planstate = (PlanState*)sortstate;
+    PlanState *planstate = NULL;
+    planstate = (PlanState *)sortstate;
     AssertEreport(IsA(sortstate, SortState) || IsA(sortstate, VecSortState), MOD_EXECUTOR, "unexpect sortstate type");
 
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
-        const char* sortMethod = NULL;
-        const char* spaceType = NULL;
+        Instrumentation *instr = NULL;
+        const char *sortMethod = NULL;
+        const char *spaceType = NULL;
         long spaceUsed = 0;
         bool has_sort_info = false;
         long max_diskUsed = 0;
@@ -4334,13 +4591,13 @@ static void show_sort_info(SortState* sortstate, ExplainState* es)
                     instr->sorthashinfo.sortMethodId > (int)STILLINPROGRESS)
                     continue;
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -4362,13 +4619,10 @@ static void show_sort_info(SortState* sortstate, ExplainState* es)
                     if (es->planinfo->m_staticInfo != NULL) {
                         es->planinfo->m_staticInfo->set_plan_name<true, true>();
                         appendStringInfo(es->planinfo->m_staticInfo->info_str, "%s ", node_name);
-                        appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                            "Sort Method: %s  %s: %ldkB\n",
-                            sortMethod,
-                            spaceType,
-                            spaceUsed);
+                        appendStringInfo(es->planinfo->m_staticInfo->info_str, "Sort Method: %s  %s: %ldkB\n",
+                                         sortMethod, spaceType, spaceUsed);
                     }
-                    
+
                     continue;
                 }
 
@@ -4408,27 +4662,19 @@ static void show_sort_info(SortState* sortstate, ExplainState* es)
                     min_memoryUsed = rtl::min(spaceUsed, min_memoryUsed);
                 }
             }
-            if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL 
-                && es->planinfo->m_staticInfo != NULL) {
+            if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL &&
+                es->planinfo->m_staticInfo != NULL) {
                 if (max_memoryUsed != 0) {
                     es->planinfo->m_staticInfo->set_plan_name<true, true>();
                 }
-                appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                    "Sort Method: %s  %s: %ldkB ~ %ldkB\n",
-                    sortMethod,
-                    "Memory",
-                    min_memoryUsed,
-                    max_memoryUsed);
+                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Sort Method: %s  %s: %ldkB ~ %ldkB\n",
+                                 sortMethod, "Memory", min_memoryUsed, max_memoryUsed);
 
                 if (max_diskUsed != 0) {
                     es->planinfo->m_staticInfo->set_plan_name<true, true>();
                 }
-                appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                    "Sort Method: %s  %s: %ldkB ~ %ldkB\n",
-                    sortMethod,
-                    "Disk",
-                    min_diskUsed,
-                    max_diskUsed);
+                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Sort Method: %s  %s: %ldkB ~ %ldkB\n",
+                                 sortMethod, "Disk", min_diskUsed, max_diskUsed);
             } else {
                 if (max_memoryUsed != 0) {
                     if (es->format == EXPLAIN_FORMAT_TEXT)
@@ -4444,8 +4690,8 @@ static void show_sort_info(SortState* sortstate, ExplainState* es)
             }
         }
     } else {
-        char* sortMethod = NULL;
-        char* spaceType = NULL;
+        char *sortMethod = NULL;
+        char *spaceType = NULL;
         int spaceTypeId = 0;
         if (es->analyze && sortstate->sort_Done && sortstate->sortMethodId >= (int)HEAPSORT &&
             sortstate->sortMethodId <= (int)STILLINPROGRESS &&
@@ -4466,11 +4712,8 @@ static void show_sort_info(SortState* sortstate, ExplainState* es)
             if (es->detail == false && t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo &&
                 es->planinfo->m_staticInfo) {
                 es->planinfo->m_staticInfo->set_plan_name<true, true>();
-                appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                    "Sort Method: %s  %s: %ldkB\n",
-                    sortMethod,
-                    spaceType,
-                    sortstate->spaceUsed);
+                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Sort Method: %s  %s: %ldkB\n", sortMethod,
+                                 spaceType, sortstate->spaceUsed);
             } else {
                 if (es->format == EXPLAIN_FORMAT_TEXT)
                     appendStringInfoSpaces(es->str, es->indent * 2);
@@ -4493,10 +4736,8 @@ static void show_sort_group_info(SortGroupState *state, ExplainState *es)
         if (es->format == EXPLAIN_FORMAT_TEXT) {
             if (es->str->len == 0 || es->str->data[es->str->len - 1] == '\n')
                 appendStringInfoSpaces(es->str, es->indent * 2);
-            appendStringInfo(es->str, "Space Used: %s : " INT64_FORMAT "kB\n", state->spaceType,
-                             spaceUsed);
-        } 
-        else {
+            appendStringInfo(es->str, "Space Used: %s : " INT64_FORMAT "kB\n", state->spaceType, spaceUsed);
+        } else {
             ExplainPropertyInteger("Sort Space Used(kB)", spaceUsed, es);
             ExplainPropertyText("Sort Space Type", state->spaceType, es);
         }
@@ -4517,31 +4758,19 @@ static void show_datanode_hash_info(ExplainState *es, int nbatch, int nbuckets_o
                es->planinfo->m_staticInfo) {
         if (nbatch_original != nbatch) {
             appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                " Buckets: %d (originally %d) Batches: %d (originally %d)  Memory Usage: %ldkB\n",
-                nbuckets,
-                nbuckets_original,
-                nbatch,
-                nbatch_original,
-                spacePeakKb);
+                             " Buckets: %d (originally %d) Batches: %d (originally %d)  Memory Usage: %ldkB\n",
+                             nbuckets, nbuckets_original, nbatch, nbatch_original, spacePeakKb);
         } else {
-            appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                " Buckets: %d  Batches: %d  Memory Usage: %ldkB\n",
-                nbuckets,
-                nbatch,
-                spacePeakKb);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, " Buckets: %d  Batches: %d  Memory Usage: %ldkB\n",
+                             nbuckets, nbatch, spacePeakKb);
         }
     } else {
         if (nbatch_original != nbatch) {
-            appendStringInfo(es->str,
-                " Buckets: %d (originally %d) Batches: %d (originally %d)	Memory Usage: %ldkB\n",
-                nbuckets,
-                nbuckets_original,
-                nbatch,
-                nbatch_original,
-                spacePeakKb);
+            appendStringInfo(es->str, " Buckets: %d (originally %d) Batches: %d (originally %d)	Memory Usage: %ldkB\n",
+                             nbuckets, nbuckets_original, nbatch, nbatch_original, spacePeakKb);
         } else {
-            appendStringInfo(
-                es->str, " Buckets: %d  Batches: %d  Memory Usage: %ldkB\n", nbuckets, nbatch, spacePeakKb);
+            appendStringInfo(es->str, " Buckets: %d  Batches: %d  Memory Usage: %ldkB\n", nbuckets, nbatch,
+                             spacePeakKb);
         }
     }
 }
@@ -4555,7 +4784,7 @@ static void show_datanode_hash_info(ExplainState *es, int nbatch, int nbuckets_o
  * Return Value : none.
  * Notes        : none.
  */
-static void show_llvm_info(const PlanState* planstate, ExplainState* es)
+static void show_llvm_info(const PlanState *planstate, ExplainState *es)
 {
     if (!es->detail)
         return;
@@ -4563,20 +4792,20 @@ static void show_llvm_info(const PlanState* planstate, ExplainState* es)
     AssertEreport(planstate != NULL && es != NULL, MOD_EXECUTOR, "unexpect null value");
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
+        Instrumentation *instr = NULL;
         if (es->format == EXPLAIN_FORMAT_TEXT) {
             for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
                 instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id);
 
                 if (instr != NULL && instr->isLlvmOpt) {
 #ifdef ENABLE_MULTIPLE_NODES
-                    char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                    char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                    char* node_name = NULL;
+                    char *node_name = NULL;
                     if (!IS_SPQ_RUNNING) {
                         node_name = g_instance.exec_cxt.nodeName;
                     } else {
-                        node_name = (char*)palloc0(SPQNODENAMELEN);
+                        node_name = (char *)palloc0(SPQNODENAMELEN);
                         sprintf(node_name, "%d", i);
                     }
 #endif
@@ -4607,13 +4836,13 @@ static void show_llvm_info(const PlanState* planstate, ExplainState* es)
                     }
                     ExplainOpenGroup("Plan", NULL, true, es);
 #ifdef ENABLE_MULTIPLE_NODES
-                    char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                    char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                    char* node_name = NULL;
+                    char *node_name = NULL;
                     if (!IS_SPQ_RUNNING) {
                         node_name = g_instance.exec_cxt.nodeName;
                     } else {
-                        node_name = (char*)palloc0(SPQNODENAMELEN);
+                        node_name = (char *)palloc0(SPQNODENAMELEN);
                         sprintf(node_name, "%d", i);
                     }
 #endif
@@ -4638,8 +4867,8 @@ static void show_llvm_info(const PlanState* planstate, ExplainState* es)
  * @in expand_times: hashtable expand times
  * @return: void
  */
-static void show_datanode_filenum_info(
-    ExplainState* es, int file_num, int respill_time, int expand_times, StringInfo info_str)
+static void show_datanode_filenum_info(ExplainState *es, int file_num, int respill_time, int expand_times,
+                                       StringInfo info_str)
 {
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         if (file_num > 0) {
@@ -4671,9 +4900,9 @@ static void show_datanode_filenum_info(
  * @in label_name: operator label name
  * @return: void
  */
-static void show_detail_filenum_info(const PlanState* planstate, ExplainState* es, const char* label_name)
+static void show_detail_filenum_info(const PlanState *planstate, ExplainState *es, const char *label_name)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     int max_file_num = 0;
     int min_file_num = MIN_FILE_NUM;
     bool is_execute = false;
@@ -4691,13 +4920,13 @@ static void show_detail_filenum_info(const PlanState* planstate, ExplainState* e
         ExplainOpenGroup(label_name, label_name, false, es);
         for (i = 0; i < datanode_size; i++) {
 #ifdef ENABLE_MULTIPLE_NODES
-            char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+            char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-            char* node_name = NULL;
+            char *node_name = NULL;
             if (!IS_SPQ_RUNNING) {
                 node_name = g_instance.exec_cxt.nodeName;
             } else {
-                node_name = (char*)palloc0(SPQNODENAMELEN);
+                node_name = (char *)palloc0(SPQNODENAMELEN);
                 sprintf(node_name, "%d", i);
             }
 #endif
@@ -4710,8 +4939,8 @@ static void show_detail_filenum_info(const PlanState* planstate, ExplainState* e
 
                     if (is_writefile || expand_times > 0) {
                         ExplainOpenGroup("Plan", NULL, true, es);
-                        if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL
-                            && es->planinfo->m_runtimeinfo != NULL && es->planinfo->m_staticInfo != NULL) {
+                        if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL &&
+                            es->planinfo->m_runtimeinfo != NULL && es->planinfo->m_staticInfo != NULL) {
                             es->planinfo->m_staticInfo->set_plan_name<false, true>();
                             es->planinfo->m_staticInfo->set_datanode_name(node_name, j, dop);
 
@@ -4719,18 +4948,13 @@ static void show_detail_filenum_info(const PlanState* planstate, ExplainState* e
                                 es->planinfo->m_runtimeinfo->put(i, j, HASH_FILENUM, instr->sorthashinfo.hash_FileNum);
                             }
 
-                            show_datanode_filenum_info(es,
-                                instr->sorthashinfo.hash_FileNum,
-                                instr->sorthashinfo.hash_spillNum,
-                                expand_times,
-                                es->planinfo->m_staticInfo->info_str);
+                            show_datanode_filenum_info(es, instr->sorthashinfo.hash_FileNum,
+                                                       instr->sorthashinfo.hash_spillNum, expand_times,
+                                                       es->planinfo->m_staticInfo->info_str);
                         } else {
                             append_datanode_name(es, node_name, dop, j);
-                            show_datanode_filenum_info(es,
-                                instr->sorthashinfo.hash_FileNum,
-                                instr->sorthashinfo.hash_spillNum,
-                                expand_times,
-                                es->str);
+                            show_datanode_filenum_info(es, instr->sorthashinfo.hash_FileNum,
+                                                       instr->sorthashinfo.hash_spillNum, expand_times, es->str);
                         }
                         ExplainCloseGroup("Plan", NULL, true, es);
                     }
@@ -4742,7 +4966,7 @@ static void show_detail_filenum_info(const PlanState* planstate, ExplainState* e
         if (datanode_size > 0) {
             int file_num = 0;
             for (i = 0; i < datanode_size; i++) {
-                ThreadInstrumentation* threadinstr =
+                ThreadInstrumentation *threadinstr =
                     u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
                 if (threadinstr == NULL)
                     continue;
@@ -4785,10 +5009,8 @@ static void show_detail_filenum_info(const PlanState* planstate, ExplainState* e
                     appendStringInfo(es->str, "Max File Num: %d  Min File Num: %d\n", max_file_num, min_file_num);
                     if (t_thrd.explain_cxt.explain_perf_mode == EXPLAIN_PRETTY && es->planinfo->m_staticInfo) {
                         es->planinfo->m_staticInfo->set_plan_name<true, true>();
-                        appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                            "Max File Num: %d  Min File Num: %d\n",
-                            max_file_num,
-                            min_file_num);
+                        appendStringInfo(es->planinfo->m_staticInfo->info_str, "Max File Num: %d  Min File Num: %d\n",
+                                         max_file_num, min_file_num);
                     }
                 }
             }
@@ -4799,9 +5021,9 @@ static void show_detail_filenum_info(const PlanState* planstate, ExplainState* e
 /*
  * Show information on hashed_setop.
  */
-static void show_setop_info(SetOpState* setopstate, ExplainState* es)
+static void show_setop_info(SetOpState *setopstate, ExplainState *es)
 {
-    PlanState* planstate = (PlanState*)setopstate;
+    PlanState *planstate = (PlanState *)setopstate;
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr && es->from_dn) {
         show_detail_filenum_info(planstate, es, "Hash Setop Detail");
     } else if (es->analyze) {
@@ -4809,12 +5031,12 @@ static void show_setop_info(SetOpState* setopstate, ExplainState* es)
             int filenum = 0;
             int expand_times = 0;
             if (IsA(setopstate, VecSetOpState)) {
-                setOpTbl* vechashSetopTbl = (setOpTbl*)((VecSetOpState*)setopstate)->vecSetOpInfo;
+                setOpTbl *vechashSetopTbl = (setOpTbl *)((VecSetOpState *)setopstate)->vecSetOpInfo;
                 if (vechashSetopTbl != NULL)
                     filenum = vechashSetopTbl->getFileNum();
                 expand_times = setopstate->ps.instrument->sorthashinfo.hashtable_expand_times;
             } else {
-                SetopWriteFileControl* TempFileControl = (SetopWriteFileControl*)setopstate->TempFileControl;
+                SetopWriteFileControl *TempFileControl = (SetopWriteFileControl *)setopstate->TempFileControl;
                 if (TempFileControl != NULL)
                     filenum = TempFileControl->filenum;
             }
@@ -4839,9 +5061,9 @@ static void show_setop_info(SetOpState* setopstate, ExplainState* es)
  * @Description: Show hashagg build and probe time info
  * @in planstate: PlanState node.+ * @in es: Explain state.
  */
-static void show_detail_execute_info(const PlanState* planstate, ExplainState* es)
+static void show_detail_execute_info(const PlanState *planstate, ExplainState *es)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     int datanode_size = 0;
     int i = 0;
     int j = 0;
@@ -4855,18 +5077,18 @@ static void show_detail_execute_info(const PlanState* planstate, ExplainState* e
 
     if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo->m_runtimeinfo) {
         for (i = 0; i < datanode_size; i++) {
-            ThreadInstrumentation* threadinstr =
+            ThreadInstrumentation *threadinstr =
                 u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
             if (threadinstr == NULL)
                 continue;
 #ifdef ENABLE_MULTIPLE_NODES
-            char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+            char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-            char* node_name = NULL;
+            char *node_name = NULL;
             if (!IS_SPQ_RUNNING) {
                 node_name = g_instance.exec_cxt.nodeName;
             } else {
-                node_name = (char*)palloc0(SPQNODENAMELEN);
+                node_name = (char *)palloc0(SPQNODENAMELEN);
                 sprintf(node_name, "%d", i);
             }
 #endif
@@ -4882,9 +5104,8 @@ static void show_detail_execute_info(const PlanState* planstate, ExplainState* e
                         es->planinfo->m_staticInfo->set_datanode_name(node_name, j, dop);
 
                         appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                            "Hashagg Build time: %.3f, Aggregation time: %.3f\n",
-                            build_time * 1000.0,
-                            agg_time * 1000.0);
+                                         "Hashagg Build time: %.3f, Aggregation time: %.3f\n", build_time * 1000.0,
+                                         agg_time * 1000.0);
                     }
                 }
             }
@@ -4895,9 +5116,9 @@ static void show_detail_execute_info(const PlanState* planstate, ExplainState* e
 /*
  * Show information on hash agg.
  */
-static void show_hashAgg_info(AggState* hashaggstate, ExplainState* es)
+static void show_hashAgg_info(AggState *hashaggstate, ExplainState *es)
 {
-    PlanState* planstate = (PlanState*)hashaggstate;
+    PlanState *planstate = (PlanState *)hashaggstate;
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr && es->from_dn) {
         show_detail_filenum_info(planstate, es, "Hash Aggregate Detail");
         show_detail_execute_info(planstate, es);
@@ -4908,13 +5129,13 @@ static void show_hashAgg_info(AggState* hashaggstate, ExplainState* es)
             double hashagg_build_time = 0.0;
             double hashagg_agg_time = 0.0;
             if (IsA(hashaggstate, VecAggState)) {
-                VecAgg* plan = (VecAgg*)(hashaggstate->ss.ps.plan);
+                VecAgg *plan = (VecAgg *)(hashaggstate->ss.ps.plan);
                 if (plan->is_sonichash) {
-                    SonicHashAgg* vechashAggTbl = (SonicHashAgg*)((VecAggState*)hashaggstate)->aggRun;
+                    SonicHashAgg *vechashAggTbl = (SonicHashAgg *)((VecAggState *)hashaggstate)->aggRun;
                     if (vechashAggTbl != NULL)
                         filenum = vechashAggTbl->getFileNum();
                 } else {
-                    HashAggRunner* vechashAggTbl = (HashAggRunner*)((VecAggState*)hashaggstate)->aggRun;
+                    HashAggRunner *vechashAggTbl = (HashAggRunner *)((VecAggState *)hashaggstate)->aggRun;
                     if (vechashAggTbl != NULL)
                         filenum = vechashAggTbl->getFileNum();
                 }
@@ -4923,29 +5144,24 @@ static void show_hashAgg_info(AggState* hashaggstate, ExplainState* es)
                 hashagg_build_time = hashaggstate->ss.ps.instrument->sorthashinfo.hashbuild_time;
                 hashagg_agg_time = hashaggstate->ss.ps.instrument->sorthashinfo.hashagg_time;
             } else {
-                AggWriteFileControl* TempFileControl = (AggWriteFileControl*)hashaggstate->aggTempFileControl;
+                AggWriteFileControl *TempFileControl = (AggWriteFileControl *)hashaggstate->aggTempFileControl;
                 if (TempFileControl != NULL)
                     filenum = TempFileControl->filenum;
             }
 
             if (filenum > 0 || expand_times > 0) {
                 if (t_thrd.explain_cxt.explain_perf_mode == EXPLAIN_NORMAL) {
-                    show_datanode_filenum_info(es,
-                        filenum,
-                        planstate->instrument->sorthashinfo.hash_spillNum,
-                        planstate->instrument->sorthashinfo.hashtable_expand_times,
-                        es->str);
+                    show_datanode_filenum_info(es, filenum, planstate->instrument->sorthashinfo.hash_spillNum,
+                                               planstate->instrument->sorthashinfo.hashtable_expand_times, es->str);
                 } else {
                     if (es->planinfo->m_runtimeinfo != NULL)
                         es->planinfo->m_runtimeinfo->put(-1, -1, HASH_FILENUM, filenum);
                     if (es->planinfo->m_staticInfo != NULL) {
                         es->planinfo->m_staticInfo->set_plan_name<true, true>();
 
-                        show_datanode_filenum_info(es,
-                            filenum,
-                            planstate->instrument->sorthashinfo.hash_spillNum,
-                            planstate->instrument->sorthashinfo.hashtable_expand_times,
-                            es->planinfo->m_staticInfo->info_str);
+                        show_datanode_filenum_info(es, filenum, planstate->instrument->sorthashinfo.hash_spillNum,
+                                                   planstate->instrument->sorthashinfo.hashtable_expand_times,
+                                                   es->planinfo->m_staticInfo->info_str);
                     }
                 }
             }
@@ -4955,9 +5171,8 @@ static void show_hashAgg_info(AggState* hashaggstate, ExplainState* es)
                 if (es->planinfo && es->planinfo->m_staticInfo) {
                     es->planinfo->m_staticInfo->set_plan_name<true, true>();
                     appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                        "Hashagg Build time: %.3f, Aggregation time: %.3f\n",
-                        hashagg_build_time * 1000.0,
-                        hashagg_agg_time * 1000.0);
+                                     "Hashagg Build time: %.3f, Aggregation time: %.3f\n", hashagg_build_time * 1000.0,
+                                     hashagg_agg_time * 1000.0);
                 }
             }
         }
@@ -4966,11 +5181,11 @@ static void show_hashAgg_info(AggState* hashaggstate, ExplainState* es)
 /*
  * Show information on hash buckets/batches.
  */
-static void show_hash_info(HashState* hashstate, ExplainState* es)
+static void show_hash_info(HashState *hashstate, ExplainState *es)
 {
     HashJoinTable hashtable;
-    PlanState* planstate = NULL;
-    planstate = (PlanState*)hashstate;
+    PlanState *planstate = NULL;
+    planstate = (PlanState *)hashstate;
     int nbatch;
     int nbatch_original;
     int nbuckets;
@@ -4991,7 +5206,7 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
 
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
+        Instrumentation *instr = NULL;
 
         if (es->detail) {
             ExplainOpenGroup("Hash Detail", "Hash Detail", false, es);
@@ -5001,13 +5216,13 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
                 if (instr == NULL)
                     continue;
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -5018,8 +5233,8 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
                 nbatch = instr->sorthashinfo.nbatch;
                 nbatch_original = instr->sorthashinfo.nbatch_original;
                 nbuckets = instr->sorthashinfo.nbuckets;
-                if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo 
-                    && es->planinfo->m_staticInfo && es->planinfo->m_runtimeinfo) {
+                if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo &&
+                    es->planinfo->m_staticInfo && es->planinfo->m_runtimeinfo) {
                     es->planinfo->m_runtimeinfo->put(i, 0, HASH_BATCH, nbatch);
                     es->planinfo->m_runtimeinfo->put(i, 0, HASH_BATCH_ORIGNAL, nbatch_original);
                     es->planinfo->m_runtimeinfo->put(i, 0, HASH_BUCKET, nbuckets);
@@ -5035,7 +5250,7 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
             ExplainCloseGroup("Hash Detail", "Hash Detail", false, es);
         } else {
             if (u_sess->instr_cxt.global_instr->getInstruNodeNum() > 0) {
-                SortHashInfo* psi = NULL;
+                SortHashInfo *psi = NULL;
                 for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
                     instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id);
 
@@ -5060,8 +5275,7 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
                     AssertEreport(max_nbatch != -1 && min_nbatch != INT_MAX && max_nbatch_original != -1 &&
                                       min_nbatch_original != INT_MAX && max_nbuckets != -1 && min_nbuckets != INT_MAX &&
                                       max_spacePeakKb != -1 && min_spacePeakKb != LONG_MAX,
-                        MOD_EXECUTOR,
-                        "unexpect min/max value");
+                                  MOD_EXECUTOR, "unexpect min/max value");
 
                     if (es->format != EXPLAIN_FORMAT_TEXT) {
                         ExplainPropertyLong("Max Hash Buckets", max_nbuckets, es);
@@ -5075,63 +5289,45 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
                     } else if (t_thrd.explain_cxt.explain_perf_mode == EXPLAIN_NORMAL) {
                         if (max_nbatch_original != max_nbatch) {
                             appendStringInfoSpaces(es->str, es->indent * 2);
-                            appendStringInfo(es->str,
+                            appendStringInfo(
+                                es->str,
                                 "Max Buckets: %d  Max Batches: %d (max originally %d)  Max Memory Usage: %ldkB\n",
-                                max_nbuckets,
-                                max_nbatch,
-                                max_nbatch_original,
-                                max_spacePeakKb);
+                                max_nbuckets, max_nbatch, max_nbatch_original, max_spacePeakKb);
                             appendStringInfoSpaces(es->str, es->indent * 2);
-                            appendStringInfo(es->str,
+                            appendStringInfo(
+                                es->str,
                                 "Min Buckets: %d  Min Batches: %d (min originally %d)  Min Memory Usage: %ldkB\n",
-                                min_nbuckets,
-                                min_nbatch,
-                                min_nbatch_original,
-                                min_spacePeakKb);
+                                min_nbuckets, min_nbatch, min_nbatch_original, min_spacePeakKb);
                         } else {
                             appendStringInfoSpaces(es->str, es->indent * 2);
-                            appendStringInfo(es->str,
-                                "Max Buckets: %d  Max Batches: %d  Max Memory Usage: %ldkB\n",
-                                max_nbuckets,
-                                max_nbatch,
-                                max_spacePeakKb);
+                            appendStringInfo(es->str, "Max Buckets: %d  Max Batches: %d  Max Memory Usage: %ldkB\n",
+                                             max_nbuckets, max_nbatch, max_spacePeakKb);
                             appendStringInfoSpaces(es->str, es->indent * 2);
-                            appendStringInfo(es->str,
-                                "Min Buckets: %d  Min Batches: %d  Min Memory Usage: %ldkB\n",
-                                min_nbuckets,
-                                min_nbatch,
-                                min_spacePeakKb);
+                            appendStringInfo(es->str, "Min Buckets: %d  Min Batches: %d  Min Memory Usage: %ldkB\n",
+                                             min_nbuckets, min_nbatch, min_spacePeakKb);
                         }
                     } else if (es->planinfo->m_staticInfo) {
                         if (max_nbatch_original != max_nbatch) {
                             es->planinfo->m_staticInfo->set_plan_name<true, true>();
-                            appendStringInfo(es->planinfo->m_staticInfo->info_str,
+                            appendStringInfo(
+                                es->planinfo->m_staticInfo->info_str,
                                 "Max Buckets: %d  Max Batches: %d (max originally %d)  Max Memory Usage: %ldkB\n",
-                                max_nbuckets,
-                                max_nbatch,
-                                max_nbatch_original,
-                                max_spacePeakKb);
+                                max_nbuckets, max_nbatch, max_nbatch_original, max_spacePeakKb);
                             es->planinfo->m_staticInfo->set_plan_name<false, true>();
-                            appendStringInfo(es->planinfo->m_staticInfo->info_str,
+                            appendStringInfo(
+                                es->planinfo->m_staticInfo->info_str,
                                 "Min Buckets: %d  Min Batches: %d (min originally %d)  Min Memory Usage: %ldkB\n",
-                                min_nbuckets,
-                                min_nbatch,
-                                min_nbatch_original,
-                                min_spacePeakKb);
+                                min_nbuckets, min_nbatch, min_nbatch_original, min_spacePeakKb);
                         } else {
                             es->planinfo->m_staticInfo->set_plan_name<true, true>();
                             appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                                "Max Buckets: %d  Max Batches: %d  Max Memory Usage: %ldkB\n",
-                                max_nbuckets,
-                                max_nbatch,
-                                max_spacePeakKb);
+                                             "Max Buckets: %d  Max Batches: %d  Max Memory Usage: %ldkB\n",
+                                             max_nbuckets, max_nbatch, max_spacePeakKb);
 
                             es->planinfo->m_staticInfo->set_plan_name<false, true>();
                             appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                                "Min Buckets: %d  Min Batches: %d  Min Memory Usage: %ldkB\n",
-                                min_nbuckets,
-                                min_nbatch,
-                                min_spacePeakKb);
+                                             "Min Buckets: %d  Min Batches: %d  Min Memory Usage: %ldkB\n",
+                                             min_nbuckets, min_nbatch, min_spacePeakKb);
                         }
                     }
                 }
@@ -5157,8 +5353,8 @@ static void show_hash_info(HashState* hashstate, ExplainState* es)
     }
 }
 
-inline static void show_buffers_info(
-    StringInfo infostr, bool has_shared, bool has_local, bool has_temp, const BufferUsage* usage)
+inline static void show_buffers_info(StringInfo infostr, bool has_shared, bool has_local, bool has_temp,
+                                     const BufferUsage *usage)
 {
     appendStringInfoString(infostr, "(Buffers:");
     if (has_shared) {
@@ -5197,7 +5393,7 @@ inline static void show_buffers_info(
     appendStringInfoString(infostr, ")\n");
 }
 
-static void put_buffers(ExplainState* es, const BufferUsage* usage, int nodeIdx, int smpIdx)
+static void put_buffers(ExplainState *es, const BufferUsage *usage, int nodeIdx, int smpIdx)
 {
     bool has_timing = false;
     es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, SHARED_BLK_HIT, Int64GetDatum(usage->shared_blks_hit));
@@ -5225,8 +5421,8 @@ static void put_buffers(ExplainState* es, const BufferUsage* usage, int nodeIdx,
     }
 }
 
-static void show_datanode_vecjoin_info(
-    ExplainState* es, StringInfo instr, int64 file_number, int spillNum, long spillSize, long space, bool is_writefile)
+static void show_datanode_vecjoin_info(ExplainState *es, StringInfo instr, int64 file_number, int spillNum,
+                                       long spillSize, long space, bool is_writefile)
 {
     if (is_writefile == false) {
         if (es->format == EXPLAIN_FORMAT_TEXT) {
@@ -5237,11 +5433,8 @@ static void show_datanode_vecjoin_info(
     } else {
         if (es->format == EXPLAIN_FORMAT_TEXT) {
             if (spillNum > 0)
-                appendStringInfo(instr,
-                    "Temp File Num: %ld, Spill Time: %d, Total Written Disk IO: %ldKB\n",
-                    file_number,
-                    spillNum,
-                    spillSize);
+                appendStringInfo(instr, "Temp File Num: %ld, Spill Time: %d, Total Written Disk IO: %ldKB\n",
+                                 file_number, spillNum, spillSize);
             else
                 appendStringInfo(instr, "Temp File Num: %ld, Total Written Disk IO: %ldKB\n", file_number, spillSize);
         } else {
@@ -5252,8 +5445,8 @@ static void show_datanode_vecjoin_info(
     }
 }
 
-static void show_datanode_sonicjoin_info(
-    ExplainState* es, StringInfo instr, int partNum, int spillNum, long space, bool is_writefile)
+static void show_datanode_sonicjoin_info(ExplainState *es, StringInfo instr, int partNum, int spillNum, long space,
+                                         bool is_writefile)
 {
     if (is_writefile == false) {
         if (es->format == EXPLAIN_FORMAT_TEXT) {
@@ -5274,22 +5467,17 @@ static void show_datanode_sonicjoin_info(
     }
 }
 
-static void show_datanode_sonicjoin_detail_info(ExplainState* es, StringInfo instr, bool buildside, int partNum,
-    int fileNum, long spillSize, long spillSizeMin, long spillSizeMax)
+static void show_datanode_sonicjoin_detail_info(ExplainState *es, StringInfo instr, bool buildside, int partNum,
+                                                int fileNum, long spillSize, long spillSizeMin, long spillSizeMax)
 {
-    const char* side = buildside ? "Inner Partition" : "Outer Partition";
+    const char *side = buildside ? "Inner Partition" : "Outer Partition";
 
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         appendStringInfo(instr,
-            "%s Spill Num: %d, "
-            "Temp File Num: %d, "
-            "Written Disk IO: %ldKB [%ldKB %ldKB]\n",
-            side,
-            partNum,
-            fileNum,
-            spillSize,
-            spillSizeMin,
-            spillSizeMax);
+                         "%s Spill Num: %d, "
+                         "Temp File Num: %d, "
+                         "Written Disk IO: %ldKB [%ldKB %ldKB]\n",
+                         side, partNum, fileNum, spillSize, spillSizeMin, spillSizeMax);
     } else {
         ExplainOpenGroup(side, side, false, es);
         ExplainPropertyLong("Spill Num", partNum, es);
@@ -5301,10 +5489,10 @@ static void show_datanode_sonicjoin_detail_info(ExplainState* es, StringInfo ins
     }
 }
 
-static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
+static void show_vechash_info(VecHashJoinState *hashstate, ExplainState *es)
 {
 
-    PlanState* planstate = (PlanState*)hashstate;
+    PlanState *planstate = (PlanState *)hashstate;
     int64 max_file_num = 0;
     int min_file_num = MIN_FILE_NUM;
     bool is_execute = false;
@@ -5322,7 +5510,7 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
 
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
+        Instrumentation *instr = NULL;
 
         if (es->detail) {
             ExplainOpenGroup("VecHashJoin Detail", "VecHashJoin Detail", false, es);
@@ -5333,13 +5521,13 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
                     continue;
                 is_writefile = instr->sorthashinfo.hash_writefile;
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -5365,8 +5553,8 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
 
                 double build_time = instr->sorthashinfo.hashbuild_time;
                 double probe_time = instr->sorthashinfo.hashagg_time;
-                if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && 
-                    es->planinfo != NULL && es->planinfo->m_staticInfo != NULL) {
+                if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL &&
+                    es->planinfo->m_staticInfo != NULL) {
                     if (is_writefile)
                         es->planinfo->m_runtimeinfo->put(i, 0, HASH_FILENUM, file_num);
                     else
@@ -5375,69 +5563,41 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
                     es->planinfo->m_staticInfo->set_plan_name<false, true>();
                     appendStringInfo(es->planinfo->m_staticInfo->info_str, "%s ", node_name);
 
-                    if (((HashJoin*)planstate->plan)->isSonicHash) {
-                        show_datanode_sonicjoin_info(
-                            es, es->planinfo->m_staticInfo->info_str, partNum, spillNum, spaceUsed, is_writefile);
+                    if (((HashJoin *)planstate->plan)->isSonicHash) {
+                        show_datanode_sonicjoin_info(es, es->planinfo->m_staticInfo->info_str, partNum, spillNum,
+                                                     spaceUsed, is_writefile);
                         if (is_writefile) {
                             es->planinfo->m_staticInfo->set_plan_name<false, true>();
                             appendStringInfo(es->planinfo->m_staticInfo->info_str, "%s ", node_name);
-                            show_datanode_sonicjoin_detail_info(es,
-                                es->planinfo->m_staticInfo->info_str,
-                                true,
-                                innerPartNum,
-                                innerFileNum,
-                                spillInnerSize,
-                                spillInnerSizeMin,
-                                spillInnerSizeMax);
+                            show_datanode_sonicjoin_detail_info(es, es->planinfo->m_staticInfo->info_str, true,
+                                                                innerPartNum, innerFileNum, spillInnerSize,
+                                                                spillInnerSizeMin, spillInnerSizeMax);
                             es->planinfo->m_staticInfo->set_plan_name<false, true>();
                             appendStringInfo(es->planinfo->m_staticInfo->info_str, "%s ", node_name);
-                            show_datanode_sonicjoin_detail_info(es,
-                                es->planinfo->m_staticInfo->info_str,
-                                false,
-                                outerPartNum,
-                                outerFileNum,
-                                spillOuterSize,
-                                spillOuterSizeMin,
-                                spillOuterSizeMax);
+                            show_datanode_sonicjoin_detail_info(es, es->planinfo->m_staticInfo->info_str, false,
+                                                                outerPartNum, outerFileNum, spillOuterSize,
+                                                                spillOuterSizeMin, spillOuterSizeMax);
                         }
                     } else
-                        show_datanode_vecjoin_info(es,
-                            es->planinfo->m_staticInfo->info_str,
-                            file_num,
-                            spillNum,
-                            spillSize,
-                            spaceUsed,
-                            is_writefile);
+                        show_datanode_vecjoin_info(es, es->planinfo->m_staticInfo->info_str, file_num, spillNum,
+                                                   spillSize, spaceUsed, is_writefile);
 
                     es->planinfo->m_staticInfo->set_plan_name<false, true>();
                     appendStringInfo(es->planinfo->m_staticInfo->info_str, "%s", node_name);
                     appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                        " Hashjoin Build time: %.3f, Probe time: %.3f\n",
-                        build_time * 1000.0,
-                        probe_time * 1000.0);
+                                     " Hashjoin Build time: %.3f, Probe time: %.3f\n", build_time * 1000.0,
+                                     probe_time * 1000.0);
                 } else {
                     append_datanode_name(es, node_name, 1, 0);
-                    if (((HashJoin*)planstate->plan)->isSonicHash) {
+                    if (((HashJoin *)planstate->plan)->isSonicHash) {
                         show_datanode_sonicjoin_info(es, es->str, partNum, spillNum, spaceUsed, is_writefile);
                         if (is_writefile) {
                             append_datanode_name(es, node_name, 1, 0);
-                            show_datanode_sonicjoin_detail_info(es,
-                                es->str,
-                                true,
-                                innerPartNum,
-                                innerFileNum,
-                                spillInnerSize,
-                                spillInnerSizeMin,
-                                spillInnerSizeMax);
+                            show_datanode_sonicjoin_detail_info(es, es->str, true, innerPartNum, innerFileNum,
+                                                                spillInnerSize, spillInnerSizeMin, spillInnerSizeMax);
                             append_datanode_name(es, node_name, 1, 0);
-                            show_datanode_sonicjoin_detail_info(es,
-                                es->str,
-                                false,
-                                outerPartNum,
-                                outerFileNum,
-                                spillOuterSize,
-                                spillOuterSizeMin,
-                                spillOuterSizeMax);
+                            show_datanode_sonicjoin_detail_info(es, es->str, false, outerPartNum, outerFileNum,
+                                                                spillOuterSize, spillOuterSizeMin, spillOuterSizeMax);
                         }
                     } else {
                         show_datanode_vecjoin_info(es, es->str, file_num, spillNum, spillSize, spaceUsed, is_writefile);
@@ -5450,7 +5610,7 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
             if (u_sess->instr_cxt.global_instr->getInstruNodeNum() > 0) {
                 file_num = 0;
                 for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
-                    ThreadInstrumentation* threadinstr =
+                    ThreadInstrumentation *threadinstr =
                         u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
                     if (threadinstr == NULL)
                         continue;
@@ -5503,18 +5663,18 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
                         } else if (es->planinfo->m_staticInfo) {
                             if (min_file_num != 0 || max_file_num != 0) {
                                 es->planinfo->m_staticInfo->set_plan_name<true, true>();
-                                appendStringInfo(
-                                    es->planinfo->m_staticInfo->info_str, "Max File Num: %ld\n", max_file_num);
+                                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Max File Num: %ld\n",
+                                                 max_file_num);
                                 es->planinfo->m_staticInfo->set_plan_name<false, true>();
-                                appendStringInfo(
-                                    es->planinfo->m_staticInfo->info_str, "Min File Num: %d\n", min_file_num);
+                                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Min File Num: %d\n",
+                                                 min_file_num);
                             } else {
                                 es->planinfo->m_staticInfo->set_plan_name<true, true>();
-                                appendStringInfo(
-                                    es->planinfo->m_staticInfo->info_str, "Max Memory Used : %ldkB\n", max_spaceused);
+                                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Max Memory Used : %ldkB\n",
+                                                 max_spaceused);
                                 es->planinfo->m_staticInfo->set_plan_name<false, true>();
-                                appendStringInfo(
-                                    es->planinfo->m_staticInfo->info_str, "Min Memory Used : %ldkB\n", min_spaceused);
+                                appendStringInfo(es->planinfo->m_staticInfo->info_str, "Min Memory Used : %ldkB\n",
+                                                 min_spaceused);
                             }
                         }
                     } else {
@@ -5529,10 +5689,10 @@ static void show_vechash_info(VecHashJoinState* hashstate, ExplainState* es)
     }
 }
 
-static void show_startwith_dfx(StartWithOpState* swstate, ExplainState* es)
+static void show_startwith_dfx(StartWithOpState *swstate, ExplainState *es)
 {
-    List* result = NIL;
-    IterationStats* iters = &(swstate->iterStats);
+    List *result = NIL;
+    IterationStats *iters = &(swstate->iterStats);
 
     /* return if not verbose or not actually executed */
     if (!es->verbose || iters->currentStartTime.tv_sec == 0) {
@@ -5545,13 +5705,11 @@ static void show_startwith_dfx(StartWithOpState* swstate, ExplainState* es)
     StringInfo si = makeStringInfo();
 
     for (int i = 0; i < SW_LOG_ROWS_FULL && i < iters->totalIters; i++) {
-        int ri = (i >= SW_LOG_ROWS_HALF && rotated) ?
-                     SW_LOG_ROWS_HALF + (i + offset) % SW_LOG_ROWS_HALF : i;
+        int ri = (i >= SW_LOG_ROWS_HALF && rotated) ? SW_LOG_ROWS_HALF + (i + offset) % SW_LOG_ROWS_HALF : i;
         double total_time = (iters->endTimeBuf[ri].tv_sec - iters->startTimeBuf[ri].tv_sec) / 0.001 +
                             (iters->endTimeBuf[ri].tv_usec - iters->startTimeBuf[ri].tv_usec) * 0.001;
-        appendStringInfo(
-            si, "\nIteration: %d, Row(s): %ld, Time Cost: %.3lf ms",
-            iters->levelBuf[ri], iters->rowCountBuf[ri], total_time);
+        appendStringInfo(si, "\nIteration: %d, Row(s): %ld, Time Cost: %.3lf ms", iters->levelBuf[ri],
+                         iters->rowCountBuf[ri], total_time);
         result = lappend(result, pstrdup(si->data));
         resetStringInfo(si);
     }
@@ -5562,13 +5720,13 @@ static void show_startwith_dfx(StartWithOpState* swstate, ExplainState* es)
     list_free_deep(result);
 }
 
-static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es)
+static void show_recursive_info(RecursiveUnionState *rustate, ExplainState *es)
 {
-    PlanState* planstate = (PlanState*)rustate;
+    PlanState *planstate = (PlanState *)rustate;
 
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
+        Instrumentation *instr = NULL;
 
         if (es->detail && t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo != NULL) {
             ExplainOpenGroup("RecursiveUnion Detail", "RecursiveUnion Detail", false, es);
@@ -5593,8 +5751,8 @@ static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es)
                 return;
             }
 
-            appendStringInfo(
-                es->planinfo->m_recursiveInfo->info_str, "%3d --Recursive Union\n", planstate->plan->plan_node_id);
+            appendStringInfo(es->planinfo->m_recursiveInfo->info_str, "%3d --Recursive Union\n",
+                             planstate->plan->plan_node_id);
 
             appendStringInfoSpaces(es->planinfo->m_recursiveInfo->info_str, 8);
             appendStringInfo(es->planinfo->m_recursiveInfo->info_str, "Iteration times: %d\n", niters - 1);
@@ -5604,13 +5762,13 @@ static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es)
             appendStringInfo(es->planinfo->m_recursiveInfo->info_str, "Iteration[0] (Step 0 None-Recursive)\n");
             for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -5620,21 +5778,16 @@ static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es)
                     continue;
                 }
                 appendStringInfoSpaces(es->planinfo->m_recursiveInfo->info_str, 16);
-                appendStringInfo(es->planinfo->m_recursiveInfo->info_str,
-                    "%s return tuples: %lu\n",
-                    node_name,
-                    instr->recursiveInfo.iter_ntuples[0]);
+                appendStringInfo(es->planinfo->m_recursiveInfo->info_str, "%s return tuples: %lu\n", node_name,
+                                 instr->recursiveInfo.iter_ntuples[0]);
             }
 
             /* report recursive part */
             for (int iteridx = 1; iteridx < niters; iteridx++) {
                 appendStringInfoSpaces(es->planinfo->m_recursiveInfo->info_str, 8);
-                appendStringInfo(es->planinfo->m_recursiveInfo->info_str,
-                    "Iteration[%d] (Step %d Recursive[%d])%s\n",
-                    iteridx,
-                    iteridx,
-                    iteridx,
-                    (iteridx == niters - 1 && !has_reach_limit) ? " --- finish" : "");
+                appendStringInfo(es->planinfo->m_recursiveInfo->info_str, "Iteration[%d] (Step %d Recursive[%d])%s\n",
+                                 iteridx, iteridx, iteridx,
+                                 (iteridx == niters - 1 && !has_reach_limit) ? " --- finish" : "");
 
                 for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
                     instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id);
@@ -5642,22 +5795,20 @@ static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es)
                         continue;
                     }
 #ifdef ENABLE_MULTIPLE_NODES
-                    char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                    char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                    char* node_name = NULL;
+                    char *node_name = NULL;
                     if (!IS_SPQ_RUNNING) {
                         node_name = g_instance.exec_cxt.nodeName;
                     } else {
-                        node_name = (char*)palloc0(SPQNODENAMELEN);
+                        node_name = (char *)palloc0(SPQNODENAMELEN);
                         sprintf(node_name, "%d", i);
                     }
 #endif
 
                     appendStringInfoSpaces(es->planinfo->m_recursiveInfo->info_str, 16);
-                    appendStringInfo(es->planinfo->m_recursiveInfo->info_str,
-                        "%s return tuples: %lu\n",
-                        node_name,
-                        instr->recursiveInfo.iter_ntuples[iteridx]);
+                    appendStringInfo(es->planinfo->m_recursiveInfo->info_str, "%s return tuples: %lu\n", node_name,
+                                     instr->recursiveInfo.iter_ntuples[iteridx]);
                 }
             }
 
@@ -5666,9 +5817,9 @@ static void show_recursive_info(RecursiveUnionState* rustate, ExplainState* es)
     }
 }
 
-static void show_datanode_buffers(ExplainState* es, PlanState* planstate)
+static void show_datanode_buffers(ExplainState *es, PlanState *planstate)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     int nodeNum = u_sess->instr_cxt.global_instr->getInstruNodeNum();
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
     int i = 0;
@@ -5683,13 +5834,13 @@ static void show_datanode_buffers(ExplainState* es, PlanState* planstate)
                 if (instr == NULL)
                     continue;
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -5714,7 +5865,7 @@ static void show_datanode_buffers(ExplainState* es, PlanState* planstate)
     }
 }
 
-static void show_analyze_buffers(ExplainState* es, const PlanState* planstate, StringInfo infostr, int nodeNum)
+static void show_analyze_buffers(ExplainState *es, const PlanState *planstate, StringInfo infostr, int nodeNum)
 {
     bool has_shared = false;
     bool has_local = false;
@@ -5743,7 +5894,7 @@ static void show_analyze_buffers(ExplainState* es, const PlanState* planstate, S
     instr_time blk_read_time_max, blk_read_time_min;
     instr_time blk_write_time_max, blk_write_time_min;
     bool is_execute = false;
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
 
     INSTR_TIME_SET_ZERO(blk_read_time_max);
@@ -5753,14 +5904,14 @@ static void show_analyze_buffers(ExplainState* es, const PlanState* planstate, S
 
     if (nodeNum > 0) {
         for (int i = 0; i < nodeNum; i++) {
-            ThreadInstrumentation* threadinstr =
+            ThreadInstrumentation *threadinstr =
                 u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
             if (threadinstr == NULL)
                 continue;
             for (int j = 0; j < dop; j++) {
                 instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
                 if (instr != NULL && instr->nloops > 0) {
-                    BufferUsage* pbu = &instr->bufusage;
+                    BufferUsage *pbu = &instr->bufusage;
 
                     if (!is_execute) {
                         is_execute = true;
@@ -5925,10 +6076,10 @@ static void show_analyze_buffers(ExplainState* es, const PlanState* planstate, S
     }
 }
 
-static void show_buffers(ExplainState* es, StringInfo infostr, const Instrumentation* instrument, bool is_datanode,
-    int nodeIdx, int smpIdx, const char* node_name)
+static void show_buffers(ExplainState *es, StringInfo infostr, const Instrumentation *instrument, bool is_datanode,
+                         int nodeIdx, int smpIdx, const char *node_name)
 {
-    const BufferUsage* usage = &instrument->bufusage;
+    const BufferUsage *usage = &instrument->bufusage;
 
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         bool has_shared = (usage->shared_blks_hit > 0 || usage->shared_blks_read > 0 ||
@@ -5997,84 +6148,57 @@ static void show_buffers(ExplainState* es, StringInfo infostr, const Instrumenta
  * left child processed rows/right child processedrows.
  */
 template <bool datanode>
-static void show_child_cpu_cycles_and_rows(PlanState* planstate, int idx, int smpIdx, double* outerCycles,
-    double* innerCycles, uint64* outterRows, uint64* innerRows)
+static void show_child_cpu_cycles_and_rows(PlanState *planstate, int idx, int smpIdx, double *outerCycles,
+                                           double *innerCycles, uint64 *outterRows, uint64 *innerRows)
 {
-    PlanState* outerChild = NULL;
-    PlanState* innerChild = NULL;
-    Instrumentation* tmp_instr = NULL;
-    Plan* plan = planstate->plan;
+    PlanState *outerChild = NULL;
+    PlanState *innerChild = NULL;
+    Instrumentation *tmp_instr = NULL;
+    Plan *plan = planstate->plan;
     int outer_smp_idx = 0;
     int inner_smp_idx = 0;
 
     switch (nodeTag(plan)) {
         case T_ModifyTable:
         case T_VecModifyTable:
-            CalCPUMemberNode<datanode>(((ModifyTable*)plan)->plans,
-                ((ModifyTableState*)planstate)->mt_plans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((ModifyTable *)plan)->plans, ((ModifyTableState *)planstate)->mt_plans, idx,
+                                       smpIdx, outerCycles, outterRows);
             break;
         case T_VecAppend:
         case T_Append:
-            CalCPUMemberNode<datanode>(((Append*)plan)->appendplans,
-                ((AppendState*)planstate)->appendplans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((Append *)plan)->appendplans, ((AppendState *)planstate)->appendplans, idx,
+                                       smpIdx, outerCycles, outterRows);
             break;
         case T_MergeAppend:
-            CalCPUMemberNode<datanode>(((MergeAppend*)plan)->mergeplans,
-                ((MergeAppendState*)planstate)->mergeplans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((MergeAppend *)plan)->mergeplans, ((MergeAppendState *)planstate)->mergeplans,
+                                       idx, smpIdx, outerCycles, outterRows);
             break;
         case T_BitmapAnd:
-            CalCPUMemberNode<datanode>(((BitmapAnd*)plan)->bitmapplans,
-                ((BitmapAndState*)planstate)->bitmapplans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((BitmapAnd *)plan)->bitmapplans, ((BitmapAndState *)planstate)->bitmapplans,
+                                       idx, smpIdx, outerCycles, outterRows);
             break;
         case T_BitmapOr:
-            CalCPUMemberNode<datanode>(((BitmapOr*)plan)->bitmapplans,
-                ((BitmapOrState*)planstate)->bitmapplans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((BitmapOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans, idx,
+                                       smpIdx, outerCycles, outterRows);
             break;
         case T_CStoreIndexAnd:
-            CalCPUMemberNode<datanode>(((CStoreIndexAnd*)plan)->bitmapplans,
-                ((BitmapAndState*)planstate)->bitmapplans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((CStoreIndexAnd *)plan)->bitmapplans,
+                                       ((BitmapAndState *)planstate)->bitmapplans, idx, smpIdx, outerCycles,
+                                       outterRows);
             break;
         case T_CStoreIndexOr:
-            CalCPUMemberNode<datanode>(((CStoreIndexOr*)plan)->bitmapplans,
-                ((BitmapOrState*)planstate)->bitmapplans,
-                idx,
-                smpIdx,
-                outerCycles,
-                outterRows);
+            CalCPUMemberNode<datanode>(((CStoreIndexOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans,
+                                       idx, smpIdx, outerCycles, outterRows);
             break;
         case T_SubqueryScan:
         case T_VecSubqueryScan:
             /* Left Tree Only */
-            outerChild = ((SubqueryScanState*)planstate)->subplan;
+            outerChild = ((SubqueryScanState *)planstate)->subplan;
             if (outerChild != NULL) {
                 if (datanode) {
                     outer_smp_idx = outerChild->plan->parallel_enabled ? smpIdx : 0;
-                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(
-                        idx, outerChild->plan->plan_node_id, outer_smp_idx);
+                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(idx, outerChild->plan->plan_node_id,
+                                                                             outer_smp_idx);
                 } else
                     tmp_instr = planstate->instrument;
                 if (tmp_instr != NULL) {
@@ -6096,8 +6220,8 @@ static void show_child_cpu_cycles_and_rows(PlanState* planstate, int idx, int sm
             if (outerChild != NULL) {
                 if (datanode) {
                     outer_smp_idx = outerChild->plan->parallel_enabled ? smpIdx : 0;
-                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(
-                        idx, outerChild->plan->plan_node_id, outer_smp_idx);
+                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(idx, outerChild->plan->plan_node_id,
+                                                                             outer_smp_idx);
                 } else
                     tmp_instr = outerChild->instrument;
                 if (tmp_instr != NULL) {
@@ -6110,8 +6234,8 @@ static void show_child_cpu_cycles_and_rows(PlanState* planstate, int idx, int sm
             if (innerChild != NULL) {
                 if (datanode) {
                     inner_smp_idx = innerChild->plan->parallel_enabled ? smpIdx : 0;
-                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(
-                        idx, innerChild->plan->plan_node_id, inner_smp_idx);
+                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(idx, innerChild->plan->plan_node_id,
+                                                                             inner_smp_idx);
                 } else
                     tmp_instr = innerChild->instrument;
                 if (tmp_instr != NULL) {
@@ -6131,11 +6255,12 @@ static void show_child_cpu_cycles_and_rows(PlanState* planstate, int idx, int sm
  * of the operator.
  */
 template <bool datanode>
-static void CalCPUMemberNode(const List* plans, PlanState** planstates, int idx, int smpIdx, double* Cycles, uint64* proRows)
+static void CalCPUMemberNode(const List *plans, PlanState **planstates, int idx, int smpIdx, double *Cycles,
+                             uint64 *proRows)
 {
     int nplans = list_length(plans);
     int k;
-    Instrumentation* tmp_instr = NULL;
+    Instrumentation *tmp_instr = NULL;
 
     for (k = 0; k < nplans; k++) {
         if (datanode) {
@@ -6154,11 +6279,11 @@ static void CalCPUMemberNode(const List* plans, PlanState** planstates, int idx,
 }
 
 template <bool datanode>
-static void CalOperTimeMemberNode(const List* plans, PlanState** planstates, int idx, int smpIdx, double* oper_time)
+static void CalOperTimeMemberNode(const List *plans, PlanState **planstates, int idx, int smpIdx, double *oper_time)
 {
     int nplans = list_length(plans);
     int k;
-    Instrumentation* tmp_instr = NULL;
+    Instrumentation *tmp_instr = NULL;
 
     for (k = 0; k < nplans; k++) {
         if (datanode) {
@@ -6179,59 +6304,56 @@ static void CalOperTimeMemberNode(const List* plans, PlanState** planstates, int
  * Calculate the child node's run time
  */
 template <bool datanode>
-static void show_child_time(
-    PlanState* planstate, int idx, int smpIdx, double* inner_time, double* outer_time, ExplainState* es)
+static void show_child_time(PlanState *planstate, int idx, int smpIdx, double *inner_time, double *outer_time,
+                            ExplainState *es)
 {
-    PlanState* outerChild = NULL;
-    PlanState* innerChild = NULL;
-    Instrumentation* tmp_instr = NULL;
-    Plan* plan = planstate->plan;
+    PlanState *outerChild = NULL;
+    PlanState *innerChild = NULL;
+    Instrumentation *tmp_instr = NULL;
+    Plan *plan = planstate->plan;
     int outer_smp_idx = 0;
     int inner_smp_idx = 0;
 
     switch (nodeTag(plan)) {
         case T_ModifyTable:
         case T_VecModifyTable:
-            CalOperTimeMemberNode<datanode>(
-                ((ModifyTable*)plan)->plans, ((ModifyTableState*)planstate)->mt_plans, idx, smpIdx, outer_time);
+            CalOperTimeMemberNode<datanode>(((ModifyTable *)plan)->plans, ((ModifyTableState *)planstate)->mt_plans,
+                                            idx, smpIdx, outer_time);
             break;
         case T_VecAppend:
         case T_Append:
-            CalOperTimeMemberNode<datanode>(
-                ((Append*)plan)->appendplans, ((AppendState*)planstate)->appendplans, idx, smpIdx, outer_time);
+            CalOperTimeMemberNode<datanode>(((Append *)plan)->appendplans, ((AppendState *)planstate)->appendplans, idx,
+                                            smpIdx, outer_time);
             break;
         case T_MergeAppend:
-            CalOperTimeMemberNode<datanode>(
-                ((MergeAppend*)plan)->mergeplans, ((MergeAppendState*)planstate)->mergeplans, idx, smpIdx, outer_time);
+            CalOperTimeMemberNode<datanode>(((MergeAppend *)plan)->mergeplans,
+                                            ((MergeAppendState *)planstate)->mergeplans, idx, smpIdx, outer_time);
             break;
         case T_BitmapAnd:
-            CalOperTimeMemberNode<datanode>(
-                ((BitmapAnd*)plan)->bitmapplans, ((BitmapAndState*)planstate)->bitmapplans, idx, smpIdx, outer_time);
+            CalOperTimeMemberNode<datanode>(((BitmapAnd *)plan)->bitmapplans,
+                                            ((BitmapAndState *)planstate)->bitmapplans, idx, smpIdx, outer_time);
             break;
         case T_BitmapOr:
-            CalOperTimeMemberNode<datanode>(
-                ((BitmapOr*)plan)->bitmapplans, ((BitmapOrState*)planstate)->bitmapplans, idx, smpIdx, outer_time);
+            CalOperTimeMemberNode<datanode>(((BitmapOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans,
+                                            idx, smpIdx, outer_time);
             break;
         case T_CStoreIndexAnd:
-            CalOperTimeMemberNode<datanode>(((CStoreIndexAnd*)plan)->bitmapplans,
-                ((BitmapAndState*)planstate)->bitmapplans,
-                idx,
-                smpIdx,
-                outer_time);
+            CalOperTimeMemberNode<datanode>(((CStoreIndexAnd *)plan)->bitmapplans,
+                                            ((BitmapAndState *)planstate)->bitmapplans, idx, smpIdx, outer_time);
             break;
         case T_CStoreIndexOr:
-            CalOperTimeMemberNode<datanode>(
-                ((CStoreIndexOr*)plan)->bitmapplans, ((BitmapOrState*)planstate)->bitmapplans, idx, smpIdx, outer_time);
+            CalOperTimeMemberNode<datanode>(((CStoreIndexOr *)plan)->bitmapplans,
+                                            ((BitmapOrState *)planstate)->bitmapplans, idx, smpIdx, outer_time);
             break;
         case T_SubqueryScan:
         case T_VecSubqueryScan:
             /* Left Tree Only */
-            outerChild = ((SubqueryScanState*)planstate)->subplan;
+            outerChild = ((SubqueryScanState *)planstate)->subplan;
             if (outerChild != NULL) {
                 if (datanode) {
                     outer_smp_idx = outerChild->plan->parallel_enabled ? smpIdx : 0;
-                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(
-                        idx, outerChild->plan->plan_node_id, outer_smp_idx);
+                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(idx, outerChild->plan->plan_node_id,
+                                                                             outer_smp_idx);
                 } else
                     tmp_instr = planstate->instrument;
                 if (tmp_instr != NULL && tmp_instr->nloops > 0)
@@ -6245,10 +6367,10 @@ static void show_child_time(
             *outer_time = planstate->instrument->network_perfdata.total_poll_time;
             if (es->planinfo->m_query_summary) {
                 double deserialze_time = planstate->instrument->network_perfdata.total_deserialize_time;
-                appendStringInfo(
-                    es->planinfo->m_query_summary->info_str, "Remote query poll time: %.3f ms", *outer_time);
-                appendStringInfo(
-                    es->planinfo->m_query_summary->info_str, ", Deserialze time: %.3f ms\n", deserialze_time);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, "Remote query poll time: %.3f ms",
+                                 *outer_time);
+                appendStringInfo(es->planinfo->m_query_summary->info_str, ", Deserialze time: %.3f ms\n",
+                                 deserialze_time);
             }
             break;
 
@@ -6269,8 +6391,8 @@ static void show_child_time(
             if (outerChild != NULL) {
                 if (datanode) {
                     outer_smp_idx = outerChild->plan->parallel_enabled ? smpIdx : 0;
-                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(
-                        idx, outerChild->plan->plan_node_id, outer_smp_idx);
+                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(idx, outerChild->plan->plan_node_id,
+                                                                             outer_smp_idx);
                 } else {
                     InstrEndLoop(outerChild->instrument);
                     tmp_instr = outerChild->instrument;
@@ -6285,8 +6407,8 @@ static void show_child_time(
             if (innerChild != NULL) {
                 if (datanode) {
                     inner_smp_idx = innerChild->plan->parallel_enabled ? smpIdx : 0;
-                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(
-                        idx, innerChild->plan->plan_node_id, inner_smp_idx);
+                    tmp_instr = u_sess->instr_cxt.global_instr->getInstrSlot(idx, innerChild->plan->plan_node_id,
+                                                                             inner_smp_idx);
                 } else {
                     InstrEndLoop(innerChild->instrument);
                     tmp_instr = innerChild->instrument;
@@ -6311,9 +6433,9 @@ inline static void show_cpu_info(StringInfo infostr, double incCycles, double ex
     appendStringInfoChar(infostr, '\n');
 }
 
-static void show_detail_cpu(ExplainState* es, PlanState* planstate)
+static void show_detail_cpu(ExplainState *es, PlanState *planstate)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     uint64 proRows = 0;
     double incCycles = 0.0;
     double exCycles = 0.0;
@@ -6342,8 +6464,8 @@ static void show_detail_cpu(ExplainState* es, PlanState* planstate)
                     if (!is_null)
                         is_null = true;
 
-                    show_child_cpu_cycles_and_rows<true>(
-                        planstate, i, j, &outerCycles, &innerCycles, &outterRows, &innerRows);
+                    show_child_cpu_cycles_and_rows<true>(planstate, i, j, &outerCycles, &innerCycles, &outterRows,
+                                                         &innerRows);
 
                     incCycles = instr->cpuusage.m_cycles;
                     exCycles = incCycles - outerCycles - innerCycles;
@@ -6365,8 +6487,7 @@ static void show_detail_cpu(ExplainState* es, PlanState* planstate)
         AssertEreport(
             (incCycles_max != -1 || exCycles_max != -1 || proRows_max != -1) &&
                 (incCycles_min != HUGE_VAL - 1 || exCycles_min != HUGE_VAL - 1 || proRows_min != HUGE_VAL - 1),
-            MOD_EXECUTOR,
-            "unexpect min/max value");
+            MOD_EXECUTOR, "unexpect min/max value");
 
         if (es->format == EXPLAIN_FORMAT_TEXT) {
             appendStringInfoSpaces(es->str, es->indent * 2);
@@ -6419,7 +6540,7 @@ static void show_detail_cpu(ExplainState* es, PlanState* planstate)
 }
 
 // To determine whether the current operator is actually executed.
-static bool get_execute_mode(const ExplainState* es, int idx)
+static bool get_execute_mode(const ExplainState *es, int idx)
 {
     int id;
     if (!es->from_dn || !es->sql_execute)
@@ -6427,7 +6548,7 @@ static bool get_execute_mode(const ExplainState* es, int idx)
     id = idx < 0 ? 0 : idx;
 
     if (u_sess->instr_cxt.global_instr) {
-        ThreadInstrumentation* threadinstr =
+        ThreadInstrumentation *threadinstr =
 #ifdef ENABLE_MULTIPLE_NODES
             u_sess->instr_cxt.global_instr->getThreadInstrumentationCN(id);
 #else
@@ -6449,8 +6570,8 @@ static bool get_execute_mode(const ExplainState* es, int idx)
     return true;
 }
 
-static void show_cpu(ExplainState* es, const Instrumentation* instrument, double innerCycles, double outerCycles, int nodeIdx,
-    int smpIdx, uint64 proRows)
+static void show_cpu(ExplainState *es, const Instrumentation *instrument, double innerCycles, double outerCycles,
+                     int nodeIdx, int smpIdx, uint64 proRows)
 {
     if (instrument != NULL && instrument->nloops > 0) {
         double incCycles = 0.0;
@@ -6501,7 +6622,8 @@ static void show_cpu(ExplainState* es, const Instrumentation* instrument, double
  * @in dop - query dop
  * @out - void
  */
-static void show_pretty_memory(ExplainState* es, char* node_name, const Instrumentation* instrument, int smpIdx, int dop)
+static void show_pretty_memory(ExplainState *es, char *node_name, const Instrumentation *instrument, int smpIdx,
+                               int dop)
 {
     es->planinfo->m_staticInfo->set_plan_name<true, true>();
 
@@ -6510,32 +6632,29 @@ static void show_pretty_memory(ExplainState* es, char* node_name, const Instrume
     }
 
     if (instrument->memoryinfo.peakOpMemory <= 1024)
-        appendStringInfo(
-            es->planinfo->m_staticInfo->info_str, "Peak Memory: %ldBYTE", instrument->memoryinfo.peakOpMemory);
+        appendStringInfo(es->planinfo->m_staticInfo->info_str, "Peak Memory: %ldBYTE",
+                         instrument->memoryinfo.peakOpMemory);
     else
-        appendStringInfo(
-            es->planinfo->m_staticInfo->info_str, "Peak Memory: %ldKB", instrument->memoryinfo.peakOpMemory / 1024);
+        appendStringInfo(es->planinfo->m_staticInfo->info_str, "Peak Memory: %ldKB",
+                         instrument->memoryinfo.peakOpMemory / 1024);
 
     if (instrument->memoryinfo.peakControlMemory > 0) {
         if (instrument->memoryinfo.peakControlMemory <= 1024)
-            appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                ", Control Memory: %ldBYTE",
-                instrument->memoryinfo.peakControlMemory);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, ", Control Memory: %ldBYTE",
+                             instrument->memoryinfo.peakControlMemory);
         else
-            appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                ", Control Memory: %ldKB",
-                instrument->memoryinfo.peakControlMemory / 1024);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, ", Control Memory: %ldKB",
+                             instrument->memoryinfo.peakControlMemory / 1024);
     }
 
     /* show operator memory information */
     if (instrument->memoryinfo.operatorMemory > 0) {
         if (instrument->memoryinfo.operatorMemory <= 1024)
-            appendStringInfo(
-                es->planinfo->m_staticInfo->info_str, ", Estimate Memory: %dKB", instrument->memoryinfo.operatorMemory);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, ", Estimate Memory: %dKB",
+                             instrument->memoryinfo.operatorMemory);
         else
-            appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                ", Estimate Memory: %dMB",
-                instrument->memoryinfo.operatorMemory / 1024);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, ", Estimate Memory: %dMB",
+                             instrument->memoryinfo.operatorMemory / 1024);
     }
 
     if (instrument->spreadNum > 0) {
@@ -6553,8 +6672,8 @@ static void show_pretty_memory(ExplainState* es, char* node_name, const Instrume
     appendStringInfo(es->planinfo->m_staticInfo->info_str, "\n");
 }
 
-static void show_pretty_time(
-    ExplainState* es, Instrumentation* instrument, char* node_name, int nodeIdx, int smpIdx, int dop, bool executed)
+static void show_pretty_time(ExplainState *es, Instrumentation *instrument, char *node_name, int nodeIdx, int smpIdx,
+                             int dop, bool executed)
 {
     if (instrument != NULL && instrument->nloops > 0) {
         double nloops = instrument->nloops;
@@ -6574,8 +6693,8 @@ static void show_pretty_time(
             if (instrument->memoryinfo.peakOpMemory <= 1024)
                 rc = sprintf_s(memoryPeakSize, sizeof(memoryPeakSize), "%ldBYTE", instrument->memoryinfo.peakOpMemory);
             else
-                rc = sprintf_s(
-                    memoryPeakSize, sizeof(memoryPeakSize), "%ldKB", instrument->memoryinfo.peakOpMemory / 1024);
+                rc = sprintf_s(memoryPeakSize, sizeof(memoryPeakSize), "%ldKB",
+                               instrument->memoryinfo.peakOpMemory / 1024);
             securec_check_ss(rc, "\0", "\0");
 
             es->planinfo->m_planInfo->put(ACTUAL_WIDTH, PointerGetDatum(cstring_to_text("")));
@@ -6589,11 +6708,11 @@ static void show_pretty_time(
                 es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, PEAK_OP_MEMORY, instrument->memoryinfo.peakOpMemory);
 
                 if (node_name != NULL)
-                    es->planinfo->m_runtimeinfo->put(
-                        nodeIdx, smpIdx, NODE_NAME, PointerGetDatum(cstring_to_text(node_name)));
+                    es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, NODE_NAME,
+                                                     PointerGetDatum(cstring_to_text(node_name)));
                 else
-                    es->planinfo->m_runtimeinfo->put(
-                        nodeIdx, smpIdx, NODE_NAME, PointerGetDatum(cstring_to_text("coordinator")));
+                    es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, NODE_NAME,
+                                                     PointerGetDatum(cstring_to_text("coordinator")));
             }
 
             if (es->detail) {
@@ -6604,14 +6723,11 @@ static void show_pretty_time(
 
                 if (instrument->need_timer)
                     appendStringInfo(es->planinfo->m_datanodeInfo->info_str,
-                        "(actual time=%.3f..%.3f rows=%.0f loops=%.0f)\n",
-                        startup_sec,
-                        total_sec,
-                        rows,
-                        nloops);
+                                     "(actual time=%.3f..%.3f rows=%.0f loops=%.0f)\n", startup_sec, total_sec, rows,
+                                     nloops);
                 else
-                    appendStringInfo(
-                        es->planinfo->m_datanodeInfo->info_str, "(actual rows=%.0f loops=%.0f)\n", rows, nloops);
+                    appendStringInfo(es->planinfo->m_datanodeInfo->info_str, "(actual rows=%.0f loops=%.0f)\n", rows,
+                                     nloops);
 
                 show_pretty_memory(es, node_name, instrument, smpIdx, dop);
             }
@@ -6619,49 +6735,44 @@ static void show_pretty_time(
     } else if (es->planinfo->m_runtimeinfo) {
         if (node_name != NULL) {
             if (executed)
-                es->planinfo->m_runtimeinfo->put(
-                    nodeIdx, smpIdx, NODE_NAME, PointerGetDatum(cstring_to_text(node_name)));
+                es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, NODE_NAME,
+                                                 PointerGetDatum(cstring_to_text(node_name)));
         } else
-            es->planinfo->m_runtimeinfo->put(
-                nodeIdx, smpIdx, NODE_NAME, PointerGetDatum(cstring_to_text("coordinator")));
+            es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, NODE_NAME,
+                                             PointerGetDatum(cstring_to_text("coordinator")));
     }
 }
 
 template <bool isdetail>
-static StreamTime* get_instrument(
-    int j, int smpid, Track* trackpoint, int plan_node_id, StringInfo str, bool* first_time)
+static StreamTime *get_instrument(int j, int smpid, Track *trackpoint, int plan_node_id, StringInfo str,
+                                  bool *first_time)
 {
-    StreamTime* instrument = NULL;
+    StreamTime *instrument = NULL;
 
     int dop = u_sess->instr_cxt.global_instr->getNodeDop(plan_node_id);
 #ifdef ENABLE_MULTIPLE_NODES
-    char* node_name = PGXCNodeGetNodeNameFromId(j, PGXC_NODE_DATANODE);
+    char *node_name = PGXCNodeGetNodeNameFromId(j, PGXC_NODE_DATANODE);
 #else
-    char* node_name = NULL;
+    char *node_name = NULL;
     if (!IS_SPQ_RUNNING) {
         node_name = g_instance.exec_cxt.nodeName;
     } else {
-        node_name = (char*)palloc0(SPQNODENAMELEN);
+        node_name = (char *)palloc0(SPQNODENAMELEN);
         sprintf(node_name, "%d", j);
     }
 #endif
-
 
     instrument = &trackpoint->track_time;
 
     if (*first_time) {
         if (trackpoint->node_id > 0)
-            appendStringInfo(str,
-                "Plan Node id: %d  Track name: %s\n",
-                trackpoint->node_id,
-                trackdesc[trackpoint->registerTrackId].trackName);
+            appendStringInfo(str, "Plan Node id: %d  Track name: %s\n", trackpoint->node_id,
+                             trackdesc[trackpoint->registerTrackId].trackName);
 
         /* nodeid == -1 means generaltrack */
         if (trackpoint->node_id == -1)
-            appendStringInfo(str,
-                "Segment Id: %d  Track name: %s\n",
-                plan_node_id,
-                trackdesc[trackpoint->registerTrackId].trackName);
+            appendStringInfo(str, "Segment Id: %d  Track name: %s\n", plan_node_id,
+                             trackdesc[trackpoint->registerTrackId].trackName);
         *first_time = false;
     }
 
@@ -6680,15 +6791,15 @@ static StreamTime* get_instrument(
 }
 
 /* show general track info which is not related to plannodeid */
-static void show_track_time_without_plannodeid(ExplainState* es)
+static void show_track_time_without_plannodeid(ExplainState *es)
 {
     StringInfo str;
-    StreamTime* instrument = NULL;
+    StreamTime *instrument = NULL;
     int i = 0;
     int j = 0;
     bool has_perf = CPUMon::m_has_perf;
     AccumCounters accumcount;
-    const char* track_name = NULL;
+    const char *track_name = NULL;
     bool first_time = true;
     int track_Id;
 
@@ -6702,7 +6813,7 @@ static void show_track_time_without_plannodeid(ExplainState* es)
     int threadlen = u_sess->instr_cxt.global_instr->get_threadInstrArrayLen();
     int m_gather_count = u_sess->instr_cxt.global_instr->get_gather_num();
 
-    ThreadInstrumentation* threadinstr = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
+    ThreadInstrumentation *threadinstr = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
 
     int generaltracknum = threadinstr->get_generaltracknum();
 
@@ -6711,9 +6822,9 @@ static void show_track_time_without_plannodeid(ExplainState* es)
         track_Id = i;
         track_name = trackdesc[track_Id].trackName;
 
-        ThreadInstrumentation* threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
+        ThreadInstrumentation *threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
 
-        Track* generaltrack = &threadinstr_tmp->m_generalTrackArray[i];
+        Track *generaltrack = &threadinstr_tmp->m_generalTrackArray[i];
         int segmentid = threadinstr_tmp->getSegmentId();
         if (segmentid > 0 && generaltrack->registerTrackId == track_Id && IS_NULL(generaltrack->active)) {
             instrument = &generaltrack->track_time;
@@ -6725,13 +6836,13 @@ static void show_track_time_without_plannodeid(ExplainState* es)
 
                 appendStringInfo(str, "Segment Id: %d  Track name: %s\n", segmentid, track_name);
 #ifdef ENABLE_MULTIPLE_NODES
-                char* nodename = PGXCNodeGetNodeNameFromId(0, PGXC_NODE_COORDINATOR);
+                char *nodename = PGXCNodeGetNodeNameFromId(0, PGXC_NODE_COORDINATOR);
 #else
-                char* nodename = NULL;
+                char *nodename = NULL;
                 if (!IS_SPQ_RUNNING) {
                     nodename = g_instance.exec_cxt.nodeName;
                 } else {
-                    nodename = (char*)palloc0(SPQNODENAMELEN);
+                    nodename = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(nodename, "%d", i);
                 }
 #endif
@@ -6744,25 +6855,17 @@ static void show_track_time_without_plannodeid(ExplainState* es)
                         appendStringInfo(str, " (time=%.3f total_calls=%.0f loops=%.0f)", total_sec, rows, nloops);
                     } else {
                         accumcount = generaltrack->accumCounters;
-                        appendStringInfo(str,
-                            " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                            total_sec,
-                            accumcount.accumCounters[1],
-                            accumcount.accumCounters[0],
-                            rows,
-                            nloops);
+                        appendStringInfo(
+                            str, " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)", total_sec,
+                            accumcount.accumCounters[1], accumcount.accumCounters[0], rows, nloops);
                     }
                 } else {
                     if (!has_perf) {
                         appendStringInfo(str, " (total_calls=%.0f loops=%.0f)", rows, nloops);
                     } else {
                         accumcount = generaltrack->accumCounters;
-                        appendStringInfo(str,
-                            " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                            accumcount.accumCounters[1],
-                            accumcount.accumCounters[0],
-                            rows,
-                            nloops);
+                        appendStringInfo(str, " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
+                                         accumcount.accumCounters[1], accumcount.accumCounters[0], rows, nloops);
                     }
                 }
                 appendStringInfoChar(str, '\n');
@@ -6771,18 +6874,18 @@ static void show_track_time_without_plannodeid(ExplainState* es)
 
         for (j = 1; j < threadlen; j++) {
 
-            ThreadInstrumentation* threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(j);
+            ThreadInstrumentation *threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(j);
 
             if (threadinstr_tmp != NULL) {
-                Track* generaltrack_tmp = &threadinstr_tmp->m_generalTrackArray[i];
+                Track *generaltrack_tmp = &threadinstr_tmp->m_generalTrackArray[i];
                 int segmentid_tmp = threadinstr_tmp->getSegmentId();
-                if (segmentid_tmp > 0 && generaltrack_tmp->registerTrackId == track_Id && 
+                if (segmentid_tmp > 0 && generaltrack_tmp->registerTrackId == track_Id &&
                     IS_NULL(generaltrack_tmp->active)) {
                     int nodeidx = (j - 1) / ((m_gather_count + m_num_streams) * m_query_dop);
                     int smpid = (j - 1) % m_query_dop;
 
-                    instrument = get_instrument<true>(nodeidx, smpid, generaltrack_tmp, segmentid_tmp, str, 
-                                                      &first_time);
+                    instrument =
+                        get_instrument<true>(nodeidx, smpid, generaltrack_tmp, segmentid_tmp, str, &first_time);
                     if (instrument != NULL && instrument->nloops > 0) {
                         double nloops = instrument->nloops;
                         const double total_sec = 1000.0 * instrument->total;
@@ -6790,29 +6893,22 @@ static void show_track_time_without_plannodeid(ExplainState* es)
 
                         if (instrument->need_timer) {
                             if (!has_perf) {
-                                appendStringInfo(
-                                    str, " (time=%.3f total_calls=%.0f loops=%.0f)", total_sec, rows, nloops);
+                                appendStringInfo(str, " (time=%.3f total_calls=%.0f loops=%.0f)", total_sec, rows,
+                                                 nloops);
                             } else {
                                 accumcount = generaltrack_tmp->accumCounters;
-                                appendStringInfo(str,
-                                    " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                                    total_sec,
-                                    accumcount.accumCounters[1],
-                                    accumcount.accumCounters[0],
-                                    rows,
-                                    nloops);
+                                appendStringInfo(
+                                    str, " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
+                                    total_sec, accumcount.accumCounters[1], accumcount.accumCounters[0], rows, nloops);
                             }
                         } else {
                             if (!has_perf) {
                                 appendStringInfo(str, " (total_calls=%.0f loops=%.0f)", rows, nloops);
                             } else {
                                 accumcount = generaltrack_tmp->accumCounters;
-                                appendStringInfo(str,
-                                    " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                                    accumcount.accumCounters[1],
-                                    accumcount.accumCounters[0],
-                                    rows,
-                                    nloops);
+                                appendStringInfo(str, " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
+                                                 accumcount.accumCounters[1], accumcount.accumCounters[0], rows,
+                                                 nloops);
                             }
                         }
                         appendStringInfoChar(str, '\n');
@@ -6824,17 +6920,17 @@ static void show_track_time_without_plannodeid(ExplainState* es)
 }
 
 /* show all track info */
-static void show_track_time_info(ExplainState* es)
+static void show_track_time_info(ExplainState *es)
 {
-    StreamTime* instrument = NULL;
-    Track* trackArray = NULL;
+    StreamTime *instrument = NULL;
+    Track *trackArray = NULL;
     bool first_time = true;
     int i = 0;
     int j = 0;
     StringInfo str;
     int plan_node_id;
     AccumCounters accumcount;
-    const char* track_name = NULL;
+    const char *track_name = NULL;
     bool has_perf = CPUMon::m_has_perf;
     int track_Id;
 
@@ -6849,7 +6945,7 @@ static void show_track_time_info(ExplainState* es)
     int plannodes_num = u_sess->instr_cxt.global_instr->getInstruPlanSize() + 1;
     int m_gather_count = u_sess->instr_cxt.global_instr->get_gather_num();
 
-    ThreadInstrumentation* threadinstr = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
+    ThreadInstrumentation *threadinstr = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
 
     int tracknum = threadinstr->get_tracknum();
     int generaltracknum = threadinstr->get_generaltracknum();
@@ -6864,12 +6960,12 @@ static void show_track_time_info(ExplainState* es)
             track_Id = i + generaltracknum;
             track_name = trackdesc[track_Id].trackName;
             /* print the track info on coordinator  */
-            ThreadInstrumentation* threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
+            ThreadInstrumentation *threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(0);
             int trackArrayLen = threadinstr_tmp->get_instrArrayLen();
 
             for (j = 0; j < trackArrayLen; j++) {
                 trackArray = threadinstr_tmp->m_instrArray[j].tracks;
-                Track* trackpoint = &trackArray[i];
+                Track *trackpoint = &trackArray[i];
                 plan_node_id = trackpoint->node_id;
                 if (plan_node_id > 0 && trackpoint->registerTrackId == track_Id && IS_NULL(trackpoint->active)) {
                     instrument = &trackpoint->track_time;
@@ -6881,13 +6977,13 @@ static void show_track_time_info(ExplainState* es)
 
                         appendStringInfo(str, "Plan Node id: %d  Track name: %s\n", plan_node_id, track_name);
 #ifdef ENABLE_MULTIPLE_NODES
-                        char* nodename = PGXCNodeGetNodeNameFromId(0, PGXC_NODE_COORDINATOR);
+                        char *nodename = PGXCNodeGetNodeNameFromId(0, PGXC_NODE_COORDINATOR);
 #else
-                        char* nodename = NULL;
+                        char *nodename = NULL;
                         if (!IS_SPQ_RUNNING) {
                             nodename = g_instance.exec_cxt.nodeName;
                         } else {
-                            nodename = (char*)palloc0(SPQNODENAMELEN);
+                            nodename = (char *)palloc0(SPQNODENAMELEN);
                             sprintf(nodename, "%d", i);
                         }
 #endif
@@ -6896,17 +6992,13 @@ static void show_track_time_info(ExplainState* es)
                         appendStringInfo(str, " %s:", nodename);
                         if (instrument->need_timer) {
                             if (!has_perf) {
-                                appendStringInfo(
-                                    str, " (time=%.3f total_calls=%.0f loops=%.0f)", total_sec, rows, nloops);
+                                appendStringInfo(str, " (time=%.3f total_calls=%.0f loops=%.0f)", total_sec, rows,
+                                                 nloops);
                             } else {
                                 accumcount = trackpoint->accumCounters;
-                                appendStringInfo(str,
-                                    " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                                    total_sec,
-                                    accumcount.accumCounters[1],
-                                    accumcount.accumCounters[0],
-                                    rows,
-                                    nloops);
+                                appendStringInfo(
+                                    str, " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
+                                    total_sec, accumcount.accumCounters[1], accumcount.accumCounters[0], rows, nloops);
                             }
 
                         } else {
@@ -6914,12 +7006,9 @@ static void show_track_time_info(ExplainState* es)
                                 appendStringInfo(str, " (total_calls=%.0f loops=%.0f)", rows, nloops);
                             } else {
                                 accumcount = trackpoint->accumCounters;
-                                appendStringInfo(str,
-                                    " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                                    accumcount.accumCounters[1],
-                                    accumcount.accumCounters[0],
-                                    rows,
-                                    nloops);
+                                appendStringInfo(str, " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
+                                                 accumcount.accumCounters[1], accumcount.accumCounters[0], rows,
+                                                 nloops);
                             }
                         }
                         appendStringInfoChar(str, '\n');
@@ -6935,14 +7024,14 @@ static void show_track_time_info(ExplainState* es)
                 track_Id = i + generaltracknum;
                 for (int k = 0; k < u_sess->instr_cxt.global_instr->getInstruNodeNum(); k++) {
                     for (int m = 0; m < u_sess->instr_cxt.global_instr->getNodeDop(j); m++) {
-                        ThreadInstrumentation* threadinstr_tmp =
+                        ThreadInstrumentation *threadinstr_tmp =
                             u_sess->instr_cxt.global_instr->getThreadInstrumentation(k, j, m);
                         if (threadinstr_tmp != NULL) {
                             trackArray = threadinstr_tmp->get_tracks(j);
                             /* when m_instrArrayMap is initialized but nodeinstr is not executed, it should return. */
                             if (trackArray == NULL)
                                 continue;
-                            Track* trackpoint = &trackArray[i];
+                            Track *trackpoint = &trackArray[i];
                             plan_node_id = trackpoint->node_id;
                             if (plan_node_id > 0 && trackpoint->registerTrackId == track_Id &&
                                 IS_NULL(trackpoint->active)) {
@@ -6954,33 +7043,25 @@ static void show_track_time_info(ExplainState* es)
 
                                     if (instrument->need_timer) {
                                         if (!has_perf)
-                                            appendStringInfo(str,
-                                                " (time=%.3f total_calls=%.0f loops=%.0f)",
-                                                total_sec,
-                                                rows,
-                                                nloops);
+                                            appendStringInfo(str, " (time=%.3f total_calls=%.0f loops=%.0f)", total_sec,
+                                                             rows, nloops);
                                         else {
                                             accumcount = trackpoint->accumCounters;
-                                            appendStringInfo(str,
+                                            appendStringInfo(
+                                                str,
                                                 " (time=%.3f Instructions=%ld  cpu cycles=%ld total_calls=%.0f "
                                                 "loops=%.0f)",
-                                                total_sec,
-                                                accumcount.accumCounters[1],
-                                                accumcount.accumCounters[0],
-                                                rows,
-                                                nloops);
+                                                total_sec, accumcount.accumCounters[1], accumcount.accumCounters[0],
+                                                rows, nloops);
                                         }
                                     } else {
                                         if (!has_perf)
                                             appendStringInfo(str, " (total_calls=%.0f loops=%.0f)", rows, nloops);
                                         else {
                                             accumcount = trackpoint->accumCounters;
-                                            appendStringInfo(str,
-                                                " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
-                                                accumcount.accumCounters[1],
-                                                accumcount.accumCounters[0],
-                                                rows,
-                                                nloops);
+                                            appendStringInfo(
+                                                str, " (Instructions=%ld  cpu cycles=%ld total_calls=%.0f loops=%.0f)",
+                                                accumcount.accumCounters[1], accumcount.accumCounters[0], rows, nloops);
                                         }
                                     }
                                     appendStringInfoChar(str, '\n');
@@ -7011,10 +7092,10 @@ static void show_track_time_info(ExplainState* es)
             first_time = true;
 
             for (j = 0; j < u_sess->instr_cxt.global_instr->get_threadInstrArrayLen(); j++) {
-                ThreadInstrumentation* threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(j);
+                ThreadInstrumentation *threadinstr_tmp = u_sess->instr_cxt.global_instr->get_cnthreadinstrumentation(j);
 
                 if (threadinstr_tmp != NULL) {
-                    Track* trackpoint = &threadinstr_tmp->m_generalTrackArray[i];
+                    Track *trackpoint = &threadinstr_tmp->m_generalTrackArray[i];
                     int segmentid = threadinstr_tmp->getSegmentId();
                     if (segmentid > 0 && trackpoint->registerTrackId == track_Id && IS_NULL(trackpoint->active)) {
                         int nodeidx = (j == 0 ? 0 : (j - 1) / ((m_gather_count + m_num_streams) * m_query_dop));
@@ -7048,28 +7129,19 @@ static void show_track_time_info(ExplainState* es)
             }
 
             if (need_timer && es->format == EXPLAIN_FORMAT_TEXT) {
-                AssertEreport(
-                    total_sec_max != -1 && total_sec_min != HUGE_VAL - 1, MOD_EXECUTOR, "unexpect min/max value");
+                AssertEreport(total_sec_max != -1 && total_sec_min != HUGE_VAL - 1, MOD_EXECUTOR,
+                              "unexpect min/max value");
 
                 if (es->format == EXPLAIN_FORMAT_TEXT) {
                     if (!has_perf)
-                        appendStringInfo(str,
-                            " (actual time=[%.3f, %.3f], calls=[%.0f, %.0f])\n",
-                            total_sec_min,
-                            total_sec_max,
-                            min_calls,
-                            max_calls);
+                        appendStringInfo(str, " (actual time=[%.3f, %.3f], calls=[%.0f, %.0f])\n", total_sec_min,
+                                         total_sec_max, min_calls, max_calls);
                     else
-                        appendStringInfo(str,
+                        appendStringInfo(
+                            str,
                             " (actual time=[%.3f, %.3f], Instructions=[%ld, %ld], cpu cycles=[%ld, %ld], calls=[%.0f, "
                             "%.0f])\n",
-                            total_sec_min,
-                            total_sec_max,
-                            min_stru,
-                            max_stru,
-                            min_cpu_cycle,
-                            max_cpu_cycle,
-                            min_calls,
+                            total_sec_min, total_sec_max, min_stru, max_stru, min_cpu_cycle, max_cpu_cycle, min_calls,
                             max_calls);
                 }
             }
@@ -7094,14 +7166,14 @@ static void show_track_time_info(ExplainState* es)
                 track_Id = i + generaltracknum;
                 for (int k = 0; k < u_sess->instr_cxt.global_instr->getInstruNodeNum(); k++) {
                     for (int m = 0; m < u_sess->instr_cxt.global_instr->getNodeDop(j); m++) {
-                        ThreadInstrumentation* threadinstr_tmp =
+                        ThreadInstrumentation *threadinstr_tmp =
                             u_sess->instr_cxt.global_instr->getThreadInstrumentation(k, j, m);
                         if (threadinstr_tmp != NULL) {
-                            Track* trackArray_tmp = threadinstr_tmp->get_tracks(j);
+                            Track *trackArray_tmp = threadinstr_tmp->get_tracks(j);
                             /* when m_instrArrayMap is initialized but nodeinstr is not executed, it should return. */
                             if (trackArray_tmp == NULL)
                                 continue;
-                            Track* trackpoint = &trackArray_tmp[i];
+                            Track *trackpoint = &trackArray_tmp[i];
                             plan_node_id = trackpoint->node_id;
                             if (plan_node_id > 0 && trackpoint->registerTrackId == track_Id &&
                                 IS_NULL(trackpoint->active)) {
@@ -7134,29 +7206,20 @@ static void show_track_time_info(ExplainState* es)
                 }
 
                 if (need_timer && es->format == EXPLAIN_FORMAT_TEXT) {
-                    AssertEreport(
-                        total_sec_max != -1 && total_sec_min != HUGE_VAL - 1, MOD_EXECUTOR, "unexpect min/max value");
+                    AssertEreport(total_sec_max != -1 && total_sec_min != HUGE_VAL - 1, MOD_EXECUTOR,
+                                  "unexpect min/max value");
 
                     if (es->format == EXPLAIN_FORMAT_TEXT) {
                         if (!has_perf)
-                            appendStringInfo(str,
-                                " (actual time=[%.3f, %.3f], calls=[%.0f, %.0f])\n",
-                                total_sec_min,
-                                total_sec_max,
-                                min_calls,
-                                max_calls);
+                            appendStringInfo(str, " (actual time=[%.3f, %.3f], calls=[%.0f, %.0f])\n", total_sec_min,
+                                             total_sec_max, min_calls, max_calls);
                         else
-                            appendStringInfo(str,
+                            appendStringInfo(
+                                str,
                                 " (actual time=[%.3f, %.3f], Instructions=[%ld, %ld], cpu cycles=[%ld, %ld], "
                                 "calls=[%.0f, %.0f])\n",
-                                total_sec_min,
-                                total_sec_max,
-                                min_stru,
-                                max_stru,
-                                min_cpu_cycle,
-                                max_cpu_cycle,
-                                min_calls,
-                                max_calls);
+                                total_sec_min, total_sec_max, min_stru, max_stru, min_cpu_cycle, max_cpu_cycle,
+                                min_calls, max_calls);
                     }
                 }
             }
@@ -7164,8 +7227,8 @@ static void show_track_time_info(ExplainState* es)
     }
 }
 
-int get_track_time(ExplainState* es, PlanState* planstate, bool show_track, bool show_buffer, bool show_dummygroup,
-    bool show_indexinfo, bool show_storageinfo)
+int get_track_time(ExplainState *es, PlanState *planstate, bool show_track, bool show_buffer, bool show_dummygroup,
+                   bool show_indexinfo, bool show_storageinfo)
 {
     if (show_track)
         show_track_time_info(es);
@@ -7193,7 +7256,7 @@ int get_track_time(ExplainState* es, PlanState* planstate, bool show_track, bool
 }
 
 template <bool is_detail>
-static void show_time(ExplainState* es, const Instrumentation* instrument, int idx)
+static void show_time(ExplainState *es, const Instrumentation *instrument, int idx)
 {
     if (instrument != NULL && instrument->nloops > 0) {
         double nloops = instrument->nloops;
@@ -7204,8 +7267,8 @@ static void show_time(ExplainState* es, const Instrumentation* instrument, int i
             if (is_detail == false)
                 appendStringInfoSpaces(es->str, 1);
             if (instrument->need_timer)
-                appendStringInfo(
-                    es->str, "(actual time=%.3f..%.3f rows=%.0f loops=%.0f)", startup_sec, total_sec, rows, nloops);
+                appendStringInfo(es->str, "(actual time=%.3f..%.3f rows=%.0f loops=%.0f)", startup_sec, total_sec, rows,
+                                 nloops);
             else
                 appendStringInfo(es->str, "(actual rows=%.0f loops=%.0f)", rows, nloops);
         } else {
@@ -7260,7 +7323,7 @@ static int get_digit(int value)
 }
 
 template <bool datanode>
-static void get_oper_time(ExplainState* es, PlanState* planstate, const Instrumentation* instr, int nodeIdx, int smpIdx)
+static void get_oper_time(ExplainState *es, PlanState *planstate, const Instrumentation *instr, int nodeIdx, int smpIdx)
 {
     double outer_total_time = 0.0;
     double inner_total_time = 0.0;
@@ -7281,7 +7344,7 @@ static void get_oper_time(ExplainState* es, PlanState* planstate, const Instrume
  * @in planstate - current planstate
  * @out - void
  */
-static void show_stream_send_time(ExplainState* es, const PlanState* planstate)
+static void show_stream_send_time(ExplainState *es, const PlanState *planstate)
 {
     bool isSend = false;
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
@@ -7297,24 +7360,24 @@ static void show_stream_send_time(ExplainState* es, const PlanState* planstate)
     }
 
     for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
-        ThreadInstrumentation* threadinstr =
+        ThreadInstrumentation *threadinstr =
             u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
         if (threadinstr == NULL)
             continue;
 #ifdef ENABLE_MULTIPLE_NODES
-        char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+        char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-        char* node_name = NULL;
+        char *node_name = NULL;
         if (!IS_SPQ_RUNNING) {
             node_name = g_instance.exec_cxt.nodeName;
         } else {
-            node_name = (char*)palloc0(SPQNODENAMELEN);
+            node_name = (char *)palloc0(SPQNODENAMELEN);
             sprintf(node_name, "%d", i);
         }
 #endif
 
         for (int j = 0; j < dop; j++) {
-            Instrumentation* instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
+            Instrumentation *instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
             if (instr != NULL && instr->stream_senddata.loops == true) {
                 double send_time = instr->stream_senddata.total_send_time;
                 double wait_quota_time = instr->stream_senddata.total_wait_quota_time;
@@ -7337,17 +7400,17 @@ static void show_stream_send_time(ExplainState* es, const PlanState* planstate)
                 if (copy_time > 0.0)
                     appendStringInfo(es->planinfo->m_staticInfo->info_str, ", Data Copy time: %.3f", copy_time);
                 else
-                    appendStringInfo(
-                        es->planinfo->m_staticInfo->info_str, "; Data Serialize time: %.3f", serialize_time);
+                    appendStringInfo(es->planinfo->m_staticInfo->info_str, "; Data Serialize time: %.3f",
+                                     serialize_time);
 
                 appendStringInfoChar(es->planinfo->m_staticInfo->info_str, '\n');
             }
         }
     }
 }
-static void show_datanode_time(ExplainState* es, PlanState* planstate)
+static void show_datanode_time(ExplainState *es, PlanState *planstate)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
 
     double total_sec_max = -1;
     double total_sec_min = HUGE_VAL - 1;
@@ -7372,16 +7435,16 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
         ExplainOpenGroup("Actual In Detail", "Actual In Detail", false, es);
         for (i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
 #ifdef ENABLE_MULTIPLE_NODES
-            char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
-            ThreadInstrumentation* threadinstr = u_sess->instr_cxt.global_instr->getThreadInstrumentationCN(i);
+            char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+            ThreadInstrumentation *threadinstr = u_sess->instr_cxt.global_instr->getThreadInstrumentationCN(i);
 #else
-            char* node_name = NULL;
-            ThreadInstrumentation* threadinstr = NULL;
+            char *node_name = NULL;
+            ThreadInstrumentation *threadinstr = NULL;
             if (!IS_SPQ_RUNNING) {
                 node_name = g_instance.exec_cxt.nodeName;
                 threadinstr = u_sess->instr_cxt.global_instr->getThreadInstrumentationDN(1, 0);
             } else {
-                node_name = (char*)palloc0(SPQNODENAMELEN);
+                node_name = (char *)palloc0(SPQNODENAMELEN);
                 sprintf(node_name, "%d", i);
                 threadinstr = u_sess->instr_cxt.global_instr->getThreadInstrumentationCN(i);
             }
@@ -7459,14 +7522,12 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
                         else {
                             if (planstate->plan->operatorMemKB[0] > MIN_OP_MEM &&
                                 planstate->plan->operatorMaxMem > planstate->plan->operatorMemKB[0])
-                                rc = sprintf_s(opmem,
-                                    sizeof(opmem),
-                                    "%dMB(%dMB)",
-                                    (int)planstate->plan->operatorMemKB[0] / 1024,
-                                    (int)planstate->plan->operatorMaxMem / 1024);
+                                rc = sprintf_s(opmem, sizeof(opmem), "%dMB(%dMB)",
+                                               (int)planstate->plan->operatorMemKB[0] / 1024,
+                                               (int)planstate->plan->operatorMaxMem / 1024);
                             else
-                                rc = sprintf_s(
-                                    opmem, sizeof(opmem), "%dMB", (int)planstate->plan->operatorMemKB[0] / 1024);
+                                rc = sprintf_s(opmem, sizeof(opmem), "%dMB",
+                                               (int)planstate->plan->operatorMemKB[0] / 1024);
                         }
                         securec_check_ss(rc, "\0", "\0");
                     }
@@ -7479,8 +7540,8 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
                 else if (peak_memory_min < 1024 * 1024)
                     rc = sprintf_s(memoryPeakMinSize, sizeof(memoryPeakMinSize), "%ldKB", peak_memory_min / 1024);
                 else
-                    rc = sprintf_s(
-                        memoryPeakMinSize, sizeof(memoryPeakMinSize), "%ldMB", peak_memory_min / (1024 * 1024));
+                    rc = sprintf_s(memoryPeakMinSize, sizeof(memoryPeakMinSize), "%ldMB",
+                                   peak_memory_min / (1024 * 1024));
                 securec_check_ss(rc, "\0", "\0");
 
                 char memoryPeakMaxSize[100] = "\0";
@@ -7489,8 +7550,8 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
                 else if (peak_memory_max < 1024 * 1024)
                     rc = sprintf_s(memoryPeakMaxSize, sizeof(memoryPeakMaxSize), "%ldKB", peak_memory_max / 1024);
                 else
-                    rc = sprintf_s(
-                        memoryPeakMaxSize, sizeof(memoryPeakMaxSize), "%ldMB", peak_memory_max / (1024 * 1024));
+                    rc = sprintf_s(memoryPeakMaxSize, sizeof(memoryPeakMaxSize), "%ldMB",
+                                   peak_memory_max / (1024 * 1024));
                 securec_check_ss(rc, "\0", "\0");
 
                 char memoryStr[256] = "\0";
@@ -7505,7 +7566,7 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
     } else {
         if (u_sess->instr_cxt.global_instr->getInstruNodeNum() > 0) {
             for (i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
-                ThreadInstrumentation* threadinstr =
+                ThreadInstrumentation *threadinstr =
                     u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
                 if (threadinstr == NULL)
                     continue;
@@ -7534,18 +7595,12 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
         if (need_timer) {
             AssertEreport((total_sec_max != -1 || start_sec_max != -1) &&
                               (total_sec_min != HUGE_VAL - 1 || start_sec_min != HUGE_VAL - 1),
-                MOD_EXECUTOR,
-                "unexpect min/max value");
+                          MOD_EXECUTOR, "unexpect min/max value");
 
             if (es->format == EXPLAIN_FORMAT_TEXT) {
                 if (es->timing)
-                    appendStringInfo(es->str,
-                        " (actual time=[%.3f,%.3f]..[%.3f,%.3f], rows=%.0f)",
-                        start_sec_min,
-                        total_sec_min,
-                        start_sec_max,
-                        total_sec_max,
-                        rows);
+                    appendStringInfo(es->str, " (actual time=[%.3f,%.3f]..[%.3f,%.3f], rows=%.0f)", start_sec_min,
+                                     total_sec_min, start_sec_max, total_sec_max, rows);
                 else
                     appendStringInfo(es->str, " (actual rows=%.0f)", rows);
 
@@ -7572,14 +7627,12 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
                             else {
                                 if (planstate->plan->operatorMemKB[0] > MIN_OP_MEM &&
                                     planstate->plan->operatorMaxMem > planstate->plan->operatorMemKB[0])
-                                    rc = sprintf_s(opmem,
-                                        sizeof(opmem),
-                                        "%dMB(%dMB)",
-                                        (int)planstate->plan->operatorMemKB[0] / 1024,
-                                        (int)planstate->plan->operatorMaxMem / 1024);
+                                    rc = sprintf_s(opmem, sizeof(opmem), "%dMB(%dMB)",
+                                                   (int)planstate->plan->operatorMemKB[0] / 1024,
+                                                   (int)planstate->plan->operatorMaxMem / 1024);
                                 else
-                                    rc = sprintf_s(
-                                        opmem, sizeof(opmem), "%dMB", (int)planstate->plan->operatorMemKB[0] / 1024);
+                                    rc = sprintf_s(opmem, sizeof(opmem), "%dMB",
+                                                   (int)planstate->plan->operatorMemKB[0] / 1024);
                             }
                             securec_check_ss(rc, "\0", "\0");
                         }
@@ -7592,8 +7645,8 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
                     else if (peak_memory_min < 1024 * 1024)
                         rc = sprintf_s(memoryPeakMinSize, sizeof(memoryPeakMinSize), "%ldKB", peak_memory_min / 1024);
                     else
-                        rc = sprintf_s(
-                            memoryPeakMinSize, sizeof(memoryPeakMinSize), "%ldMB", peak_memory_min / (1024 * 1024));
+                        rc = sprintf_s(memoryPeakMinSize, sizeof(memoryPeakMinSize), "%ldMB",
+                                       peak_memory_min / (1024 * 1024));
                     securec_check_ss(rc, "\0", "\0");
 
                     char memoryPeakMaxSize[100] = "\0";
@@ -7602,8 +7655,8 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
                     else if (peak_memory_max < 1024 * 1024)
                         rc = sprintf_s(memoryPeakMaxSize, sizeof(memoryPeakMaxSize), "%ldKB", peak_memory_max / 1024);
                     else
-                        rc = sprintf_s(
-                            memoryPeakMaxSize, sizeof(memoryPeakMaxSize), "%ldMB", peak_memory_max / (1024 * 1024));
+                        rc = sprintf_s(memoryPeakMaxSize, sizeof(memoryPeakMaxSize), "%ldMB",
+                                       peak_memory_max / (1024 * 1024));
                     securec_check_ss(rc, "\0", "\0");
 
                     char memoryStr[256] = "\0";
@@ -7654,8 +7707,7 @@ static void show_datanode_time(ExplainState* es, PlanState* planstate)
 
 static void show_tidbitmap_info(BitmapHeapScanState *planstate, ExplainState *es)
 {
-    if (es->format != EXPLAIN_FORMAT_TEXT)
-    {
+    if (es->format != EXPLAIN_FORMAT_TEXT) {
         ExplainPropertyLong("Exact Heap Blocks", planstate->exact_pages, es);
         ExplainPropertyLong("Lossy Heap Blocks", planstate->lossy_pages, es);
     } else {
@@ -7678,10 +7730,10 @@ static void show_tidbitmap_info(BitmapHeapScanState *planstate, ExplainState *es
  *
  * "which" identifies which instrumentation counter to print
  */
-static void show_instrumentation_count(const char* qlabel, int which, const PlanState* planstate, ExplainState* es)
+static void show_instrumentation_count(const char *qlabel, int which, const PlanState *planstate, ExplainState *es)
 {
     double nfiltered = 0.0;
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
 
     if (!es->analyze || !planstate->instrument)
@@ -7690,7 +7742,7 @@ static void show_instrumentation_count(const char* qlabel, int which, const Plan
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
         for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
-            ThreadInstrumentation* threadinstr =
+            ThreadInstrumentation *threadinstr =
                 u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
             if (threadinstr == NULL)
                 continue;
@@ -7731,9 +7783,9 @@ static void show_instrumentation_count(const char* qlabel, int which, const Plan
 /*
  * Show removed rows by filters.
  */
-static void show_removed_rows(int which, const PlanState* planstate, int idx, int smpIdx, int* removeRows)
+static void show_removed_rows(int which, const PlanState *planstate, int idx, int smpIdx, int *removeRows)
 {
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
 
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
@@ -7762,11 +7814,10 @@ static int check_integer_overflow(double var)
 {
     if (var > (double)PG_INT32_MAX || var < (double)PG_INT32_MIN) {
         ereport(ERROR,
-            (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE), errmodule(MOD_OPT),
-            errmsg("Integer overflow."),
-            errdetail("Integer overflow occurred when assigning a double variable to an int variable."),
-            errcause("Try to assign a double variable to an int variable."),
-            erraction("Please check whether the double variable exceeds the representation range of int.")));
+                (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE), errmodule(MOD_OPT), errmsg("Integer overflow."),
+                 errdetail("Integer overflow occurred when assigning a double variable to an int variable."),
+                 errcause("Try to assign a double variable to an int variable."),
+                 erraction("Please check whether the double variable exceeds the representation range of int.")));
     }
     return (int)var;
 }
@@ -7774,25 +7825,25 @@ static int check_integer_overflow(double var)
 /*
  * Show extra information for a ForeignScan node.
  */
-static void show_foreignscan_info(ForeignScanState* fsstate, ExplainState* es)
+static void show_foreignscan_info(ForeignScanState *fsstate, ExplainState *es)
 {
-    FdwRoutine* fdwroutine = fsstate->fdwroutine;
+    FdwRoutine *fdwroutine = fsstate->fdwroutine;
 
     /* if we want to know what the remote plan like, numbering this node to find it quickly later. */
     if (u_sess->attr.attr_common.show_fdw_remote_plan) {
         es->es_frs.node_num++;
-        ExplainPropertyInteger("Node ID", es->es_frs.node_num , es);
+        ExplainPropertyInteger("Node ID", es->es_frs.node_num, es);
     }
 
     /* Let the FDW emit whatever fields it wants */
     if (NULL != fdwroutine && NULL != fdwroutine->ExplainForeignScan)
         fdwroutine->ExplainForeignScan(fsstate, es);
-    
+
     /* Let the FDW get the remote plan */
     if (u_sess->attr.attr_common.show_fdw_remote_plan) {
         /* Set a title */
         if (es->es_frs.node_num == 1) {
-            es->es_frs.str=makeStringInfo();
+            es->es_frs.str = makeStringInfo();
             appendStringInfo(es->es_frs.str, "\nFDW remote plans:\n");
         }
 
@@ -7814,7 +7865,7 @@ static void show_foreignscan_info(ForeignScanState* fsstate, ExplainState* es)
  * @Return: true if needed to display bloomfilter info; otherwise false.
  * @See also:
  */
-static inline bool storage_has_bloomfilter_info(const Instrumentation* instr)
+static inline bool storage_has_bloomfilter_info(const Instrumentation *instr)
 {
     return (instr->bloomFilterRows > 0);
 }
@@ -7826,7 +7877,7 @@ static inline bool storage_has_bloomfilter_info(const Instrumentation* instr)
  * @Return: true if needed to display minmax filter info; otherwise false.
  * @See also:
  */
-static inline bool storage_has_minmax_filter(const Instrumentation* instr)
+static inline bool storage_has_minmax_filter(const Instrumentation *instr)
 {
     return (instr->minmaxFilterFiles > 0 || instr->minmaxFilterStripe > 0 || instr->minmaxFilterStride > 0 ||
             instr->minmaxFilterRows > 0);
@@ -7839,7 +7890,7 @@ static inline bool storage_has_minmax_filter(const Instrumentation* instr)
  * @Return: true if needed to display pruned-partition info; otherwise false.
  * @See also:
  */
-static inline bool storage_has_pruned_info(const Instrumentation* instr)
+static inline bool storage_has_pruned_info(const Instrumentation *instr)
 {
     return (instr->dynamicPrunFiles > 0 || instr->staticPruneFiles > 0);
 }
@@ -7850,7 +7901,7 @@ static inline bool storage_has_pruned_info(const Instrumentation* instr)
  * @in instr_info - the string to be append
  * @return - void
  */
-static void show_detail_storage_info_json_of_dfs(Instrumentation* instr, StringInfo instr_info, ExplainState* es)
+static void show_detail_storage_info_json_of_dfs(Instrumentation *instr, StringInfo instr_info, ExplainState *es)
 {
     if (storage_has_bloomfilter_info(instr)) {
         ExplainPropertyLong("rows skipped by bloom filter", instr->bloomFilterRows, es);
@@ -7887,7 +7938,8 @@ static void show_detail_storage_info_json_of_dfs(Instrumentation* instr, StringI
     }
 }
 
-static void show_detail_storage_info_json_of_logft(const Instrumentation* instr, StringInfo instr_info, ExplainState* es)
+static void show_detail_storage_info_json_of_logft(const Instrumentation *instr, StringInfo instr_info,
+                                                   ExplainState *es)
 {
     if (instr->minmaxFilterStripe > 0) {
         ExplainPropertyText("refuted by hostname", "true", es);
@@ -7914,7 +7966,7 @@ static void show_detail_storage_info_json_of_logft(const Instrumentation* instr,
     }
 }
 
-static void show_detail_storage_info_json(Instrumentation* instr, StringInfo instr_info, ExplainState* es)
+static void show_detail_storage_info_json(Instrumentation *instr, StringInfo instr_info, ExplainState *es)
 {
     if (instr->dfsType == TYPE_LOG_FT) {
         show_detail_storage_info_json_of_logft(instr, instr_info, es);
@@ -7923,7 +7975,7 @@ static void show_detail_storage_info_json(Instrumentation* instr, StringInfo ins
     }
 }
 
-static void show_detail_storage_info_text_of_dfs(Instrumentation* instr, StringInfo instr_info)
+static void show_detail_storage_info_text_of_dfs(Instrumentation *instr, StringInfo instr_info)
 {
     if (storage_has_bloomfilter_info(instr)) {
         appendStringInfo(instr_info, "(skip %lu rows by bloom filter", instr->bloomFilterRows);
@@ -7964,7 +8016,7 @@ static void show_detail_storage_info_text_of_dfs(Instrumentation* instr, StringI
     appendStringInfo(instr_info, "\n");
 }
 
-static void show_detail_storage_info_text_of_logft(const Instrumentation* instr, StringInfo instr_info)
+static void show_detail_storage_info_text_of_logft(const Instrumentation *instr, StringInfo instr_info)
 {
     if (instr->minmaxFilterStripe > 0) {
         appendStringInfo(instr_info, "(refuted by hostname)");
@@ -7972,20 +8024,16 @@ static void show_detail_storage_info_text_of_logft(const Instrumentation* instr,
     if (instr->minmaxCheckStride > 0) {
         appendStringInfo(instr_info, "(dirname: total %lu", instr->minmaxCheckStride);
         if (instr->minmaxFilterStride > 0) {
-            appendStringInfo(instr_info,
-                ", refuted %lu, scan %lu",
-                instr->minmaxFilterStride,
-                (instr->minmaxCheckStride - instr->minmaxFilterStride));
+            appendStringInfo(instr_info, ", refuted %lu, scan %lu", instr->minmaxFilterStride,
+                             (instr->minmaxCheckStride - instr->minmaxFilterStride));
         }
         appendStringInfo(instr_info, ")");
     }
     if (instr->minmaxCheckFiles > 0) {
         appendStringInfo(instr_info, "(filename: total %lu", instr->minmaxCheckFiles);
         if (instr->minmaxFilterFiles > 0) {
-            appendStringInfo(instr_info,
-                ", refuted %lu, scan %lu",
-                instr->minmaxFilterFiles,
-                (instr->minmaxCheckFiles - instr->minmaxFilterFiles));
+            appendStringInfo(instr_info, ", refuted %lu, scan %lu", instr->minmaxFilterFiles,
+                             (instr->minmaxCheckFiles - instr->minmaxFilterFiles));
         }
         if (instr->staticPruneFiles > 0) {
             appendStringInfo(instr_info, ", incompleted %lu", instr->staticPruneFiles);
@@ -7998,7 +8046,7 @@ static void show_detail_storage_info_text_of_logft(const Instrumentation* instr,
     appendStringInfo(instr_info, "\n");
 }
 
-static void show_detail_storage_info_text(Instrumentation* instr, StringInfo instr_info)
+static void show_detail_storage_info_text(Instrumentation *instr, StringInfo instr_info)
 {
     if (instr->dfsType == TYPE_LOG_FT) {
         show_detail_storage_info_text_of_logft(instr, instr_info);
@@ -8014,14 +8062,14 @@ static void show_detail_storage_info_text(Instrumentation* instr, StringInfo ins
  * @in es - explain state info
  * @return - void
  */
-static void show_analyze_storage_info_of_dfs(const PlanState* planstate, ExplainState* es)
+static void show_analyze_storage_info_of_dfs(const PlanState *planstate, ExplainState *es)
 {
     int i = 0;
     int j = 0;
     uint64 total_bloomfilter_rows = 0;
     uint64 total_dynamicfiles = 0;
     uint64 total_staticFiles = 0;
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
     for (i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
         for (j = 0; j < dop; j++) {
@@ -8037,19 +8085,17 @@ static void show_analyze_storage_info_of_dfs(const PlanState* planstate, Explain
     if (total_bloomfilter_rows > 0 || total_dynamicfiles > 0 || total_staticFiles > 0) {
         if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo->m_staticInfo) {
             es->planinfo->m_staticInfo->set_plan_name<true, true>();
-            appendStringInfo(
-                es->planinfo->m_staticInfo->info_str, "(skip %lu rows by bloom filter,", total_bloomfilter_rows);
-            appendStringInfo(es->planinfo->m_staticInfo->info_str,
-                " pruned files: static %lu, dynamic %lu)\n",
-                total_dynamicfiles,
-                total_staticFiles);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, "(skip %lu rows by bloom filter,",
+                             total_bloomfilter_rows);
+            appendStringInfo(es->planinfo->m_staticInfo->info_str, " pruned files: static %lu, dynamic %lu)\n",
+                             total_dynamicfiles, total_staticFiles);
         }
 
         if (es->format == EXPLAIN_FORMAT_TEXT) {
             appendStringInfoSpaces(es->str, es->indent * 2);
             appendStringInfo(es->str, "(skip %lu rows by bloom filter,", total_bloomfilter_rows);
-            appendStringInfo(
-                es->str, " pruned files: static %lu, dynamic %lu)\n", total_dynamicfiles, total_staticFiles);
+            appendStringInfo(es->str, " pruned files: static %lu, dynamic %lu)\n", total_dynamicfiles,
+                             total_staticFiles);
         } else {
             ExplainPropertyLong("rows skipped by bloom filter", total_bloomfilter_rows, es);
             ExplainPropertyLong("pruned files static", total_dynamicfiles, es);
@@ -8058,7 +8104,7 @@ static void show_analyze_storage_info_of_dfs(const PlanState* planstate, Explain
     }
 }
 
-static void show_analyze_storage_info_of_logft(const PlanState* planstate, ExplainState* es)
+static void show_analyze_storage_info_of_logft(const PlanState *planstate, ExplainState *es)
 {
     uint64 total_hostname = 0;
     uint64 total_refuted_by_hostname = 0;
@@ -8068,7 +8114,7 @@ static void show_analyze_storage_info_of_logft(const PlanState* planstate, Expla
     uint64 total_refuted_by_filename = 0;
     uint64 total_incompleted = 0;
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
-    Instrumentation* instr = NULL;
+    Instrumentation *instr = NULL;
 
     int node_idx = 0;
     int dop_idx = 0;
@@ -8089,30 +8135,20 @@ static void show_analyze_storage_info_of_logft(const PlanState* planstate, Expla
 
     if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo->m_staticInfo) {
         es->planinfo->m_staticInfo->set_plan_name<true, true>();
-        appendStringInfo(es->planinfo->m_staticInfo->info_str,
-            "(nodes refuted %lu, total %lu)",
-            total_refuted_by_hostname,
-            total_hostname);
-        appendStringInfo(es->planinfo->m_staticInfo->info_str,
-            "(dirname refuted %lu, total %lu)",
-            total_refuted_by_dirname,
-            total_dirname);
-        appendStringInfo(es->planinfo->m_staticInfo->info_str,
-            "(filename refuted %lu, total %lu, incompleted %lu)\n",
-            total_refuted_by_filename,
-            total_filename,
-            total_incompleted);
+        appendStringInfo(es->planinfo->m_staticInfo->info_str, "(nodes refuted %lu, total %lu)",
+                         total_refuted_by_hostname, total_hostname);
+        appendStringInfo(es->planinfo->m_staticInfo->info_str, "(dirname refuted %lu, total %lu)",
+                         total_refuted_by_dirname, total_dirname);
+        appendStringInfo(es->planinfo->m_staticInfo->info_str, "(filename refuted %lu, total %lu, incompleted %lu)\n",
+                         total_refuted_by_filename, total_filename, total_incompleted);
     }
 
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         appendStringInfoSpaces(es->str, es->indent * 2);
         appendStringInfo(es->str, "(nodes refuted  %lu, total %lu)", total_refuted_by_hostname, total_hostname);
         appendStringInfo(es->str, "(dirname refuted %lu, total %lu)", total_refuted_by_dirname, total_dirname);
-        appendStringInfo(es->str,
-            "(filename refuted %lu, total %lu, incompleted %lu)\n",
-            total_refuted_by_filename,
-            total_filename,
-            total_incompleted);
+        appendStringInfo(es->str, "(filename refuted %lu, total %lu, incompleted %lu)\n", total_refuted_by_filename,
+                         total_filename, total_incompleted);
     } else {
         ExplainPropertyLong("nodes refuted", total_refuted_by_hostname, es);
         ExplainPropertyLong("nodes total", total_hostname, es);
@@ -8124,10 +8160,10 @@ static void show_analyze_storage_info_of_logft(const PlanState* planstate, Expla
     }
 }
 
-static void show_analyze_storage_info(PlanState* planstate, ExplainState* es)
+static void show_analyze_storage_info(PlanState *planstate, ExplainState *es)
 {
     if (u_sess->instr_cxt.global_instr->getInstruNodeNum() > 0) {
-        Instrumentation* instr = u_sess->instr_cxt.global_instr->getInstrSlot(0, planstate->plan->plan_node_id, 0);
+        Instrumentation *instr = u_sess->instr_cxt.global_instr->getInstrSlot(0, planstate->plan->plan_node_id, 0);
         if (instr && instr->dfsType == TYPE_LOG_FT) {
             show_analyze_storage_info_of_logft(planstate, es);
         } else {
@@ -8136,13 +8172,13 @@ static void show_analyze_storage_info(PlanState* planstate, ExplainState* es)
     }
 }
 
-static void show_storage_filter_info(PlanState* planstate, ExplainState* es)
+static void show_storage_filter_info(PlanState *planstate, ExplainState *es)
 {
     AssertEreport(planstate != NULL && es != NULL, MOD_EXECUTOR, "unexpect null value");
 
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
+        Instrumentation *instr = NULL;
         int i = 0;
         int j = 0;
         bool has_info = false;
@@ -8151,13 +8187,13 @@ static void show_storage_filter_info(PlanState* planstate, ExplainState* es)
         if (es->detail) {
             for (i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -8197,7 +8233,7 @@ static void show_storage_filter_info(PlanState* planstate, ExplainState* es)
     }
 }
 
-static void show_wlm_explain_name(ExplainState* es, const char* plan_name, const char* pname, int plan_node_id)
+static void show_wlm_explain_name(ExplainState *es, const char *plan_name, const char *pname, int plan_node_id)
 {
     if (plan_name != NULL) {
         appendStringInfoSpaces(es->str, *es->wlm_statistics_plan_max_digit);
@@ -8223,11 +8259,11 @@ static void show_wlm_explain_name(ExplainState* es, const char* plan_name, const
 /*
  * Show extra information of MERGE for a ModifyTable node
  */
-static void show_modifytable_merge_info(const PlanState* planstate, ExplainState* es)
+static void show_modifytable_merge_info(const PlanState *planstate, ExplainState *es)
 {
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
-        Instrumentation* instr = NULL;
+        Instrumentation *instr = NULL;
 
         if (es->detail) {
             ExplainOpenGroup("Merge Detail", "Merge Detail", false, es);
@@ -8237,13 +8273,13 @@ static void show_modifytable_merge_info(const PlanState* planstate, ExplainState
                 if (instr == NULL)
                     continue;
 #ifdef ENABLE_MULTIPLE_NODES
-                char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+                char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-                char* node_name = NULL;
+                char *node_name = NULL;
                 if (!IS_SPQ_RUNNING) {
                     node_name = g_instance.exec_cxt.nodeName;
                 } else {
-                    node_name = (char*)palloc0(SPQNODENAMELEN);
+                    node_name = (char *)palloc0(SPQNODENAMELEN);
                     sprintf(node_name, "%d", i);
                 }
 #endif
@@ -8257,8 +8293,8 @@ static void show_modifytable_merge_info(const PlanState* planstate, ExplainState
                     es->planinfo->m_datanodeInfo->set_plan_name<false, true>();
                     appendStringInfo(es->planinfo->m_datanodeInfo->info_str, "%s ", node_name);
 
-                    appendStringInfo(
-                        es->planinfo->m_datanodeInfo->info_str, "(Merge: inserted %.0f, ", instr->nfiltered1);
+                    appendStringInfo(es->planinfo->m_datanodeInfo->info_str, "(Merge: inserted %.0f, ",
+                                     instr->nfiltered1);
                     appendStringInfo(es->planinfo->m_datanodeInfo->info_str, "updated %.0f)\n", instr->nfiltered2);
                     continue;
                 }
@@ -8278,16 +8314,16 @@ static void show_modifytable_merge_info(const PlanState* planstate, ExplainState
     }
 }
 
-static void ShowRoughCheckInfo(ExplainState* es, struct Instrumentation* instrument, int nodeIdx, int smpIdx)
+static void ShowRoughCheckInfo(ExplainState *es, struct Instrumentation *instrument, int nodeIdx, int smpIdx)
 {
-    RCInfo* rcPtr = &instrument->rcInfo;
+    RCInfo *rcPtr = &instrument->rcInfo;
     if (instrument->needRCInfo) {
         if (es->planinfo && es->planinfo->m_runtimeinfo) {
             es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, CU_NONE, Int64GetDatum(rcPtr->m_CUNone));
             es->planinfo->m_runtimeinfo->put(nodeIdx, smpIdx, CU_SOME, Int64GetDatum(rcPtr->m_CUSome));
             appendStringInfoString(es->planinfo->m_datanodeInfo->info_str, "(RoughCheck CU: ");
-            appendStringInfo(
-                es->planinfo->m_datanodeInfo->info_str, "CUNone: %lu, CUSome: %lu", rcPtr->m_CUNone, rcPtr->m_CUSome);
+            appendStringInfo(es->planinfo->m_datanodeInfo->info_str, "CUNone: %lu, CUSome: %lu", rcPtr->m_CUNone,
+                             rcPtr->m_CUSome);
             appendStringInfoString(es->planinfo->m_datanodeInfo->info_str, ")\n");
         }
         if (es->format == EXPLAIN_FORMAT_TEXT) {
@@ -8308,14 +8344,14 @@ static void ShowRoughCheckInfo(ExplainState* es, struct Instrumentation* instrum
  * We allow plugins to get control here so that plans involving hypothetical
  * indexes can be explained.
  */
-static const char* explain_get_index_name(Oid indexId)
+static const char *explain_get_index_name(Oid indexId)
 {
-    const char* result = NULL;
+    const char *result = NULL;
 
     if (explain_get_index_name_hook) {
-       result = (*explain_get_index_name_hook) (indexId);
-       if(result)
-           return result;
+        result = (*explain_get_index_name_hook)(indexId);
+        if (result)
+            return result;
     }
 
     /* default behavior: look in the catalogs and quote it */
@@ -8330,9 +8366,9 @@ static const char* explain_get_index_name(Oid indexId)
 /*
  * Add some additional details about an IndexScan or IndexOnlyScan
  */
-static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, ExplainState* es)
+static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, ExplainState *es)
 {
-    const char* indexname = explain_get_index_name(indexid);
+    const char *indexname = explain_get_index_name(indexid);
 
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         if (ScanDirectionIsBackward(indexorderdir))
@@ -8347,7 +8383,7 @@ static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, Ex
             appendStringInfo(tmpName, " using %s", indexname);
         }
     } else {
-        const char* scandir = NULL;
+        const char *scandir = NULL;
 
         switch (indexorderdir) {
             case BackwardScanDirection:
@@ -8371,41 +8407,137 @@ static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, Ex
 /*
  * Show the target of a Scan node
  */
-static void ExplainScanTarget(Scan* plan, ExplainState* es)
+static void ExplainScanTarget(Scan *plan, ExplainState *es)
 {
-    ExplainTargetRel((Plan*)plan, plan->scanrelid, es);
+    ExplainTargetRel((Plan *)plan, plan->scanrelid, es);
 }
 
 /*
  * Show the target of a ModifyTable node
  */
-static void ExplainModifyTarget(ModifyTable* plan, ExplainState* es)
+static void ExplainModifyTarget(ModifyTable *plan, ExplainState *es)
 {
     Index rti;
-    bool multiTarget = (list_length((List*)linitial(plan->resultRelations)) > 1);
+    bool multiTarget = (list_length((List *)linitial(plan->resultRelations)) > 1);
     /*
      * We show the name of the first target relation.  In multi-target-table
      * cases this should always be the parent of the inheritance tree.
      */
     AssertEreport(plan->resultRelations != NIL, MOD_EXECUTOR, "unexpect empty list");
-    rti = (Index)linitial_int((List*)linitial(plan->resultRelations));
+    rti = (Index)linitial_int((List *)linitial(plan->resultRelations));
 
-    ExplainTargetRel((Plan*)plan, rti, es, multiTarget);
+    ExplainTargetRel((Plan *)plan, rti, es, multiTarget);
 }
 
+static bool GetTargetRel(Plan *plan, Index rti, List *rtable, std::string &table_name, bool multiTarget)
+{
+    RangeTblEntry *rte = NULL;
+
+    if (IsA(plan, RemoteQuery) || IsA(plan, VecRemoteQuery)) {
+        RemoteQuery *rq = (RemoteQuery *)plan;
+        /* skip Streaming(Gather) since there is no corresponding RangeTblEntry */
+        if (rq->is_simple)
+            return false;
+    }
+
+    rte = rt_fetch(rti, rtable);
+
+    if (rte == NULL) {
+        ereport(ERROR, (errcode(ERRCODE_UNEXPECTED_NULL_VALUE), errmsg("Unable to get relation.")));
+    }
+
+    switch (nodeTag(plan)) {
+        case T_ModifyTable:
+        case T_VecModifyTable: {
+            if (multiTarget) {
+                break;
+            }
+            /* Assert it's on a real relation */
+            Assert(rte != NULL);
+            Assert(rte->rtekind == RTE_RELATION);
+            table_name = get_rel_name(rte->relid);
+            return true;
+        }
+        case T_SeqScan:
+        case T_CStoreScan:
+#ifdef ENABLE_MULTIPLE_NODES
+        case T_TsStoreScan:
+#endif /* ENABLE_MULTIPLE_NODES */
+        case T_IndexScan:
+        case T_IndexOnlyScan:
+        case T_BitmapHeapScan:
+        case T_CStoreIndexScan:
+        case T_CStoreIndexCtidScan:
+        case T_CStoreIndexHeapScan:
+        case T_TidScan:
+        case T_ForeignScan:
+        case T_ExtensiblePlan:
+        case T_VecForeignScan: {
+            /* Assert it's on a real relation */
+            table_name = get_rel_name(rte->relid);
+            return true;
+        } break;
+        case T_FunctionScan: {
+            Node *funcexpr = NULL;
+
+            /* Assert it's on a RangeFunction */
+            Assert(rte != NULL && rte->rtekind == RTE_FUNCTION);
+
+            /*
+             * If the expression is still a function call, we can get the
+             * real name of the function.  Otherwise, punt (this can
+             * happen if the optimizer simplified away the function call,
+             * for example).
+             */
+            funcexpr = ((FunctionScan *)plan)->funcexpr;
+            if (funcexpr && IsA(funcexpr, FuncExpr)) {
+                Oid funcid = ((FuncExpr *)funcexpr)->funcid;
+                table_name = get_func_name(funcid);
+                return true;
+            }
+        } break;
+        case T_ValuesScan: {
+        } break;
+        case T_CteScan: {
+            /* Assert it's on a non-self-reference CTE */
+            Assert(rte != NULL && rte->rtekind == RTE_CTE && !rte->self_reference);
+            table_name = rte->ctename;
+            return true;
+        }
+        case T_WorkTableScan: {
+            /* Assert it's on a self-reference CTE */
+            Assert(rte != NULL && rte->rtekind == RTE_CTE && rte->self_reference);
+            table_name = rte->ctename;
+            return true;
+        }
+        // case T_RemoteQuery: {
+        //     /* get the object name from RTE itself */
+        //     RemoteQuery *rq = (RemoteQuery *)plan;
+
+        //     if (rq->is_simple == false && rte) {
+        //         Assert(rte->rtekind == RTE_REMOTE_DUMMY);
+        //         table_name = rte->relname;
+        //         return true;
+        //     }
+        // } break;
+        default:
+            break;
+    }
+    return false;
+}
 /*
  * Show the target relation of a scan or modify node
  */
-static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multiTarget)
+static void ExplainTargetRel(Plan *plan, Index rti, ExplainState *es, bool multiTarget)
 {
-    char* objectname = NULL;
-    char* namespc = NULL;
-    const char* objecttag = NULL;
-    char* object_type = NULL; /* for plan_table column "object_type" */
-    RangeTblEntry* rte = NULL;
+    char *objectname = NULL;
+    char *namespc = NULL;
+    const char *objecttag = NULL;
+    char *object_type = NULL; /* for plan_table column "object_type" */
+    RangeTblEntry *rte = NULL;
 
     if (IsA(plan, RemoteQuery) || IsA(plan, VecRemoteQuery)) {
-        RemoteQuery* rq = (RemoteQuery*)plan;
+        RemoteQuery *rq = (RemoteQuery *)plan;
 
         /* skip Streaming(Gather) since there is no corresponding RangeTblEntry */
         if (rq->is_simple)
@@ -8415,9 +8547,7 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
     rte = rt_fetch(rti, es->rtable);
 
     if (rte == NULL) {
-        ereport(ERROR,
-            (errcode(ERRCODE_UNEXPECTED_NULL_VALUE),
-                errmsg("Unable to get relation.")));
+        ereport(ERROR, (errcode(ERRCODE_UNEXPECTED_NULL_VALUE), errmsg("Unable to get relation.")));
     }
 
     /* Set object_type from rte->rtekind or rte->relkind for 'plan_table'. */
@@ -8444,7 +8574,7 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
         case T_CStoreScan:
 #ifdef ENABLE_MULTIPLE_NODES
         case T_TsStoreScan:
-#endif   /* ENABLE_MULTIPLE_NODES */
+#endif /* ENABLE_MULTIPLE_NODES */
         case T_IndexScan:
         case T_IndexOnlyScan:
         case T_BitmapHeapScan:
@@ -8464,7 +8594,7 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
             objecttag = "Relation Name";
         } break;
         case T_FunctionScan: {
-            Node* funcexpr = NULL;
+            Node *funcexpr = NULL;
 
             /* Assert it's on a RangeFunction */
             Assert(rte != NULL && rte->rtekind == RTE_FUNCTION);
@@ -8475,10 +8605,9 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
              * happen if the optimizer simplified away the function call,
              * for example).
              */
-            funcexpr = ((FunctionScan*)plan)->funcexpr;
+            funcexpr = ((FunctionScan *)plan)->funcexpr;
             if (funcexpr && IsA(funcexpr, FuncExpr)) {
-                Oid funcid = ((FuncExpr*)funcexpr)->funcid;
-
+                Oid funcid = ((FuncExpr *)funcexpr)->funcid;
                 objectname = get_func_name(funcid);
                 if (es->verbose || es->plan)
                     namespc = get_namespace_name(get_func_namespace(funcid));
@@ -8503,7 +8632,7 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
         } break;
         case T_RemoteQuery: {
             /* get the object name from RTE itself */
-            RemoteQuery* rq = (RemoteQuery*)plan;
+            RemoteQuery *rq = (RemoteQuery *)plan;
 
             if (rq->is_simple == false && rte) {
                 Assert(rte->rtekind == RTE_REMOTE_DUMMY);
@@ -8537,7 +8666,7 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
             }
 
             /* Show if use column table min/max optimization. */
-            if (IsA(plan, CStoreScan) && ((CStoreScan*)plan)->minMaxInfo != NULL) {
+            if (IsA(plan, CStoreScan) && ((CStoreScan *)plan)->minMaxInfo != NULL) {
                 appendStringInfo(tmpName, " %s", "(min-max optimization)");
             }
         }
@@ -8577,11 +8706,11 @@ static void ExplainTargetRel(Plan* plan, Index rti, ExplainState* es, bool multi
 /*
  * Show extra information for upsert info
  */
-static void show_on_duplicate_info(ModifyTableState* mtstate, ExplainState* es, List* ancestors)
+static void show_on_duplicate_info(ModifyTableState *mtstate, ExplainState *es, List *ancestors)
 {
-    ResultRelInfo* resultRelInfo = mtstate->resultRelInfo;
-    IndexInfo* indexInfo = NULL;
-    List* idxNames = NIL;
+    ResultRelInfo *resultRelInfo = mtstate->resultRelInfo;
+    IndexInfo *indexInfo = NULL;
+    List *idxNames = NIL;
 
     /* Gather names of ON CONFLICT Arbiter indexes */
     for (int i = 0; i < resultRelInfo->ri_NumIndices; ++i) {
@@ -8591,12 +8720,11 @@ static void show_on_duplicate_info(ModifyTableState* mtstate, ExplainState* es, 
         }
 
         Relation indexRelation = resultRelInfo->ri_IndexRelationDescs[i];
-        char* indexName = RelationGetRelationName(indexRelation);
+        char *indexName = RelationGetRelationName(indexRelation);
         idxNames = lappend(idxNames, indexName);
     }
 
-    ExplainPropertyText("Conflict Resolution",
-                        mtstate->mt_upsert->us_action == UPSERT_NOTHING ? "NOTHING" : "UPDATE",
+    ExplainPropertyText("Conflict Resolution", mtstate->mt_upsert->us_action == UPSERT_NOTHING ? "NOTHING" : "UPDATE",
                         es);
     /*
      * Don't display arbiter indexes at all when DO NOTHING variant
@@ -8608,14 +8736,14 @@ static void show_on_duplicate_info(ModifyTableState* mtstate, ExplainState* es, 
 
     /* Show ON DUPLICATE KEY UPDATE WHERE quals info if specified */
     if (mtstate->mt_upsert->us_updateWhere != NIL) {
-        ModifyTable *node = (ModifyTable*)mtstate->ps.plan;
-        Node* expr = NULL;
+        ModifyTable *node = (ModifyTable *)mtstate->ps.plan;
+        Node *expr = NULL;
         if (IsA(node->upsertWhere, List)) {
-            expr = (Node*)make_ands_explicit((List*)node->upsertWhere);
+            expr = (Node *)make_ands_explicit((List *)node->upsertWhere);
         } else {
             expr = node->upsertWhere;
         }
-        List* clauseList = list_make1(expr);
+        List *clauseList = list_make1(expr);
         show_upper_qual(clauseList, "Conflict Filter", &mtstate->ps, ancestors, es);
         list_free(clauseList);
         show_instrumentation_count("Rows Removed by Conflict Filter", 1, &mtstate->ps, es);
@@ -8625,9 +8753,9 @@ static void show_on_duplicate_info(ModifyTableState* mtstate, ExplainState* es, 
 /*
  * Show extra information for a ModifyTable node
  */
-static void show_modifytable_info(ModifyTableState* mtstate, ExplainState* es)
+static void show_modifytable_info(ModifyTableState *mtstate, ExplainState *es)
 {
-    FdwRoutine* fdwroutine = mtstate->resultRelInfo->ri_FdwRoutine;
+    FdwRoutine *fdwroutine = mtstate->resultRelInfo->ri_FdwRoutine;
 
     /*
      * If the first target relation is a foreign table, call its FDW to
@@ -8636,8 +8764,8 @@ static void show_modifytable_info(ModifyTableState* mtstate, ExplainState* es)
      * ExplainForeignModify is designed to allow them to be processed.
      */
     if (fdwroutine != NULL && fdwroutine->ExplainForeignModify != NULL) {
-        ModifyTable* node = (ModifyTable*)mtstate->ps.plan;
-        List* fdw_private = (List*)linitial(node->fdwPrivLists);
+        ModifyTable *node = (ModifyTable *)mtstate->ps.plan;
+        List *fdw_private = (List *)linitial(node->fdwPrivLists);
 
         fdwroutine->ExplainForeignModify(mtstate, mtstate->resultRelInfo, fdw_private, 0, es);
     }
@@ -8654,7 +8782,7 @@ static void show_modifytable_info(ModifyTableState* mtstate, ExplainState* es)
  * Note: we don't actually need to examine the Plan list members, but
  * we need the list in order to determine the length of the PlanState array.
  */
-static void ExplainMemberNodes(const List* plans, PlanState** planstates, List* ancestors, ExplainState* es)
+static void ExplainMemberNodes(const List *plans, PlanState **planstates, List *ancestors, ExplainState *es)
 {
     int nplans = list_length(plans);
     int j;
@@ -8671,20 +8799,28 @@ static void ExplainMemberNodes(const List* plans, PlanState** planstates, List* 
     es->from_dn = old_flag;
 }
 
+static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans, PlanState **planstates, List *ancestors)
+{
+    int nplans = list_length(plans);
+    for (int j = 0; j < nplans; j++) {
+        CollectPlanInfo(query_info, rtable, planstates[j], ancestors, "Member", NULL);
+    }
+}
+
 /*
  * Explain a list of SubPlans (or initPlans, which also use SubPlan nodes).
  *
  * The ancestors list should already contain the immediate parent of these
  * SubPlanStates.
  */
-static void ExplainSubPlans(List* plans, List* ancestors, const char* relationship, ExplainState* es)
+static void ExplainSubPlans(List *plans, List *ancestors, const char *relationship, ExplainState *es)
 {
-    ListCell* lst = NULL;
+    ListCell *lst = NULL;
     bool old_flag = es->from_dn;
 
     foreach (lst, plans) {
-        SubPlanState* sps = (SubPlanState*)lfirst(lst);
-        SubPlan* sp = (SubPlan*)sps->xprstate.expr;
+        SubPlanState *sps = (SubPlanState *)lfirst(lst);
+        SubPlan *sp = (SubPlan *)sps->xprstate.expr;
         es->from_dn = old_flag;
 
         if (sps->planstate == NULL)
@@ -8724,9 +8860,9 @@ static void ExplainSubPlans(List* plans, List* ancestors, const char* relationsh
     es->from_dn = old_flag;
 }
 
-static void ExplainPrettyList(List* data, ExplainState* es)
+static void ExplainPrettyList(List *data, ExplainState *es)
 {
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     bool first = true;
 
     foreach (lc, data) {
@@ -8734,7 +8870,7 @@ static void ExplainPrettyList(List* data, ExplainState* es)
             appendStringInfoString(es->planinfo->m_verboseInfo->info_str, ", ");
         }
 
-        appendStringInfoString(es->planinfo->m_verboseInfo->info_str, (const char*)lfirst(lc));
+        appendStringInfoString(es->planinfo->m_verboseInfo->info_str, (const char *)lfirst(lc));
 
         first = false;
     }
@@ -8749,7 +8885,7 @@ static void ExplainPrettyList(List* data, ExplainState* es)
  * es->str such that the explation is printed into es->post_str instead.
  * "data" is a list of C strings.
  */
-void ExplainPropertyListPostPlanTree(const char* qlabel, List* data, ExplainState* es)
+void ExplainPropertyListPostPlanTree(const char *qlabel, List *data, ExplainState *es)
 {
     if (es->post_str == NULL) {
         es->post_str = makeStringInfo();
@@ -8767,9 +8903,9 @@ void ExplainPropertyListPostPlanTree(const char* qlabel, List* data, ExplainStat
  * Explain a property, such as sort keys or targets, that takes the form of
  * a list of unlabeled items.  "data" is a list of C strings.
  */
-void ExplainPropertyList(const char* qlabel, List* data, ExplainState* es)
+void ExplainPropertyList(const char *qlabel, List *data, ExplainState *es)
 {
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     bool first = true;
 
     switch (es->format) {
@@ -8785,7 +8921,7 @@ void ExplainPropertyList(const char* qlabel, List* data, ExplainState* es)
             foreach (lc, data) {
                 if (!first)
                     appendStringInfoString(es->str, ", ");
-                appendStringInfoString(es->str, (const char*)lfirst(lc));
+                appendStringInfoString(es->str, (const char *)lfirst(lc));
                 first = false;
             }
             appendStringInfoChar(es->str, '\n');
@@ -8794,11 +8930,11 @@ void ExplainPropertyList(const char* qlabel, List* data, ExplainState* es)
         case EXPLAIN_FORMAT_XML:
             ExplainXMLTag(qlabel, X_OPENING, es);
             foreach (lc, data) {
-                char* str = NULL;
+                char *str = NULL;
 
                 appendStringInfoSpaces(es->str, es->indent * 2 + 2);
                 appendStringInfoString(es->str, "<Item>");
-                str = escape_xml((const char*)lfirst(lc));
+                str = escape_xml((const char *)lfirst(lc));
                 appendStringInfoString(es->str, str);
                 pfree_ext(str);
                 appendStringInfoString(es->str, "</Item>\n");
@@ -8814,7 +8950,7 @@ void ExplainPropertyList(const char* qlabel, List* data, ExplainState* es)
             foreach (lc, data) {
                 if (!first)
                     appendStringInfoString(es->str, ", ");
-                escape_json(es->str, (const char*)lfirst(lc));
+                escape_json(es->str, (const char *)lfirst(lc));
                 first = false;
             }
             appendStringInfoChar(es->str, ']');
@@ -8827,7 +8963,7 @@ void ExplainPropertyList(const char* qlabel, List* data, ExplainState* es)
                 appendStringInfoChar(es->str, '\n');
                 appendStringInfoSpaces(es->str, es->indent * 2 + 2);
                 appendStringInfoString(es->str, "- ");
-                escape_yaml(es->str, (const char*)lfirst(lc));
+                escape_yaml(es->str, (const char *)lfirst(lc));
             }
             break;
         default:
@@ -8839,9 +8975,9 @@ void ExplainPropertyList(const char* qlabel, List* data, ExplainState* es)
  * Explain a property that takes the form of a list of unlabeled items within
  * another list.  "data" is a list of C strings.
  */
-void ExplainPropertyListNested(const char* qlabel, List* data, ExplainState* es)
+void ExplainPropertyListNested(const char *qlabel, List *data, ExplainState *es)
 {
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     bool first = true;
 
     switch (es->format) {
@@ -8857,7 +8993,7 @@ void ExplainPropertyListNested(const char* qlabel, List* data, ExplainState* es)
             foreach (lc, data) {
                 if (!first)
                     appendStringInfoString(es->str, ", ");
-                escape_json(es->str, (const char*)lfirst(lc));
+                escape_json(es->str, (const char *)lfirst(lc));
                 first = false;
             }
             appendStringInfoChar(es->str, ']');
@@ -8869,7 +9005,7 @@ void ExplainPropertyListNested(const char* qlabel, List* data, ExplainState* es)
             foreach (lc, data) {
                 if (!first)
                     appendStringInfoString(es->str, ", ");
-                escape_yaml(es->str, (const char*)lfirst(lc));
+                escape_yaml(es->str, (const char *)lfirst(lc));
                 first = false;
             }
             appendStringInfoChar(es->str, ']');
@@ -8888,7 +9024,7 @@ void ExplainPropertyListNested(const char* qlabel, List* data, ExplainState* es)
  * This usually should not be invoked directly, but via one of the datatype
  * specific routines ExplainPropertyText, ExplainPropertyInteger, etc.
  */
-static void ExplainProperty(const char* qlabel, const char* value, bool numeric, ExplainState* es)
+static void ExplainProperty(const char *qlabel, const char *value, bool numeric, ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -8903,7 +9039,7 @@ static void ExplainProperty(const char* qlabel, const char* value, bool numeric,
             break;
 
         case EXPLAIN_FORMAT_XML: {
-            char* str = NULL;
+            char *str = NULL;
 
             appendStringInfoSpaces(es->str, es->indent * 2);
             ExplainXMLTag(qlabel, X_OPENING | X_NOWHITESPACE, es);
@@ -8941,7 +9077,7 @@ static void ExplainProperty(const char* qlabel, const char* value, bool numeric,
 /*
  * Explain a string-valued property.
  */
-void ExplainPropertyText(const char* qlabel, const char* value, ExplainState* es)
+void ExplainPropertyText(const char *qlabel, const char *value, ExplainState *es)
 {
     ExplainProperty(qlabel, value, false, es);
 }
@@ -8949,7 +9085,7 @@ void ExplainPropertyText(const char* qlabel, const char* value, ExplainState* es
 /*
  * Explain an integer-valued property.
  */
-void ExplainPropertyInteger(const char* qlabel, int value, ExplainState* es)
+void ExplainPropertyInteger(const char *qlabel, int value, ExplainState *es)
 {
     char buf[32];
 
@@ -8961,7 +9097,7 @@ void ExplainPropertyInteger(const char* qlabel, int value, ExplainState* es)
 /*
  * Explain a long-integer-valued property.
  */
-void ExplainPropertyLong(const char* qlabel, long value, ExplainState* es)
+void ExplainPropertyLong(const char *qlabel, long value, ExplainState *es)
 {
     char buf[32];
 
@@ -8974,7 +9110,7 @@ void ExplainPropertyLong(const char* qlabel, long value, ExplainState* es)
  * Explain a float-valued property, using the specified number of
  * fractional digits.
  */
-void ExplainPropertyFloat(const char* qlabel, double value, int ndigits, ExplainState* es)
+void ExplainPropertyFloat(const char *qlabel, double value, int ndigits, ExplainState *es)
 {
     char buf[256];
 
@@ -8992,7 +9128,7 @@ void ExplainPropertyFloat(const char* qlabel, double value, int ndigits, Explain
  * If labeled is true, the group members will be labeled properties,
  * while if it's false, they'll be unlabeled objects.
  */
-static void ExplainOpenGroup(const char* objtype, const char* labelname, bool labeled, ExplainState* es)
+static void ExplainOpenGroup(const char *objtype, const char *labelname, bool labeled, ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -9050,7 +9186,7 @@ static void ExplainOpenGroup(const char* objtype, const char* labelname, bool la
  * Close a group of related objects.
  * Parameters must match the corresponding ExplainOpenGroup call.
  */
-static void ExplainCloseGroup(const char* objtype, const char* labelname, bool labeled, ExplainState* es)
+static void ExplainCloseGroup(const char *objtype, const char *labelname, bool labeled, ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -9085,7 +9221,7 @@ static void ExplainCloseGroup(const char* objtype, const char* labelname, bool l
  * objtype is the type of the group object, labelname is its label within
  * a containing object (if any).
  */
-static void ExplainDummyGroup(const char* objtype, const char* labelname, ExplainState* es)
+static void ExplainDummyGroup(const char *objtype, const char *labelname, ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -9127,7 +9263,7 @@ static void ExplainDummyGroup(const char* objtype, const char* labelname, Explai
  * This is just enough different from processing a subgroup that we need
  * a separate pair of subroutines.
  */
-void ExplainBeginOutput(ExplainState* es)
+void ExplainBeginOutput(ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -9157,7 +9293,7 @@ void ExplainBeginOutput(ExplainState* es)
 /*
  * Emit the end-of-output boilerplate.
  */
-void ExplainEndOutput(ExplainState* es)
+void ExplainEndOutput(ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -9186,7 +9322,7 @@ void ExplainEndOutput(ExplainState* es)
 /*
  * Put an appropriate separator between multiple plans
  */
-void ExplainSeparatePlans(ExplainState* es)
+void ExplainSeparatePlans(ExplainState *es)
 {
     switch (es->format) {
         case EXPLAIN_FORMAT_TEXT:
@@ -9208,7 +9344,7 @@ void ExplainSeparatePlans(ExplainState* es)
 /*
  * Emit execution node list number.
  */
-static void ExplainExecNodes(const ExecNodes* en, ExplainState* es)
+static void ExplainExecNodes(const ExecNodes *en, ExplainState *es)
 {
     int primary_node_count = en ? list_length(en->primarynodelist) : 0;
     int node_count = en ? list_length(en->nodeList) : 0;
@@ -9224,25 +9360,25 @@ static void ExplainExecNodes(const ExecNodes* en, ExplainState* es)
     }
 }
 
-static void showStreamnetwork(Stream* stream, ExplainState* es)
+static void showStreamnetwork(Stream *stream, ExplainState *es)
 {
-    Instrumentation* instr = NULL;
-    Plan* plan = (Plan*)stream;
+    Instrumentation *instr = NULL;
+    Plan *plan = (Plan *)stream;
     long spacePeakKb = 0;
     double toltal_time = 0;
     double deserialize_time = 0;
     double copy_time = 0;
     if (u_sess->instr_cxt.global_instr && es->planinfo->m_runtimeinfo) {
-        int dop = ((Plan*)stream)->parallel_enabled ? u_sess->opt_cxt.query_dop : 1;
+        int dop = ((Plan *)stream)->parallel_enabled ? u_sess->opt_cxt.query_dop : 1;
         for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
 #ifdef ENABLE_MULTIPLE_NODES
-            char* node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
+            char *node_name = PGXCNodeGetNodeNameFromId(i, PGXC_NODE_DATANODE);
 #else
-            char* node_name = NULL;
+            char *node_name = NULL;
             if (!IS_SPQ_RUNNING) {
                 node_name = g_instance.exec_cxt.nodeName;
             } else {
-                node_name = (char*)palloc0(SPQNODENAMELEN);
+                node_name = (char *)palloc0(SPQNODENAMELEN);
                 sprintf(node_name, "%d", i);
             }
 #endif
@@ -9271,8 +9407,8 @@ static void showStreamnetwork(Stream* stream, ExplainState* es)
                 if (copy_time > 0.0)
                     appendStringInfo(es->planinfo->m_staticInfo->info_str, "; Data Copy Time: %.3f\n", copy_time);
                 else
-                    appendStringInfo(
-                        es->planinfo->m_staticInfo->info_str, "; Data Deserialize Time: %.3f\n", deserialize_time);
+                    appendStringInfo(es->planinfo->m_staticInfo->info_str, "; Data Deserialize Time: %.3f\n",
+                                     deserialize_time);
             }
         }
     }
@@ -9291,7 +9427,7 @@ static void showStreamnetwork(Stream* stream, ExplainState* es)
  *
  * @return: void
  */
-static void ShowRunNodeInfo(const ExecNodes* en, ExplainState* es, const char* qlabel)
+static void ShowRunNodeInfo(const ExecNodes *en, ExplainState *es, const char *qlabel)
 {
     if (en != NULL && es->nodes) {
         StringInfo node_names = makeStringInfo();
@@ -9299,23 +9435,21 @@ static void ShowRunNodeInfo(const ExecNodes* en, ExplainState* es, const char* q
         if (list_length(en->nodeList) == u_sess->pgxc_cxt.NumDataNodes) {
             appendStringInfo(node_names, "All datanodes");
         } else {
-            ListCell* lcell = NULL;
-            char* sep = "";
+            ListCell *lcell = NULL;
+            char *sep = "";
             int node_no;
 
             /* we show group name information except in single installation group scenario */
             if (ng_enable_nodegroup_explain()) {
-                char* group_name = ng_get_dist_group_name((Distribution*)&(en->distribution));
+                char *group_name = ng_get_dist_group_name((Distribution *)&(en->distribution));
                 appendStringInfo(node_names, "(%s) ", group_name);
             }
 
             foreach (lcell, en->nodeList) {
                 NameData nodename = {{0}};
                 node_no = lfirst_int(lcell);
-                appendStringInfo(node_names,
-                    "%s%s",
-                    sep,
-                    get_pgxc_nodename(PGXCNodeGetNodeOid(node_no, PGXC_NODE_DATANODE), &nodename));
+                appendStringInfo(node_names, "%s%s", sep,
+                                 get_pgxc_nodename(PGXCNodeGetNodeOid(node_no, PGXC_NODE_DATANODE), &nodename));
                 sep = ", ";
             }
         }
@@ -9342,14 +9476,14 @@ static void ShowRunNodeInfo(const ExecNodes* en, ExplainState* es, const char* q
  *
  * @return: void
  */
-static void ShowStreamRunNodeInfo(Stream* stream, ExplainState* es)
+static void ShowStreamRunNodeInfo(Stream *stream, ExplainState *es)
 {
-    ExecNodes* en = stream->scan.plan.exec_nodes;
+    ExecNodes *en = stream->scan.plan.exec_nodes;
     ShowRunNodeInfo(en, es, "Spawn on");
 
     /* show consumerNodes */
     if (es->nodes && es->verbose) {
-        ExecNodes* cen = stream->consumer_nodes;
+        ExecNodes *cen = stream->consumer_nodes;
         ShowRunNodeInfo(cen, es, "Consumer Nodes");
     }
 }
@@ -9357,10 +9491,10 @@ static void ShowStreamRunNodeInfo(Stream* stream, ExplainState* es)
 /*
  * Emit remote query planning details
  */
-static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* ancestors, ExplainState* es)
+static void ExplainRemoteQuery(RemoteQuery *plan, PlanState *planstate, List *ancestors, ExplainState *es)
 {
-    ExecNodes* en = plan->exec_nodes;
-    const char* label_name = NULL;
+    ExecNodes *en = plan->exec_nodes;
+    const char *label_name = NULL;
 
     if (es->format == EXPLAIN_FORMAT_TEXT) {
         label_name = "Node/s";
@@ -9371,8 +9505,8 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
     /* add names of the nodes if they exist */
     if (en != NULL && es->nodes && plan->position == GATHER) {
         StringInfo node_names = makeStringInfo();
-        ListCell* lcell = NULL;
-        char* sep = NULL;
+        ListCell *lcell = NULL;
+        char *sep = NULL;
         int node_no;
 
         if (en->primarynodelist) {
@@ -9385,10 +9519,8 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
                 foreach (lcell, en->primarynodelist) {
                     NameData nodename = {{0}};
                     node_no = lfirst_int(lcell);
-                    appendStringInfo(node_names,
-                        "%s%s",
-                        sep,
-                        get_pgxc_nodename(PGXCNodeGetNodeOid(node_no, exec_node_type), &nodename));
+                    appendStringInfo(node_names, "%s%s", sep,
+                                     get_pgxc_nodename(PGXCNodeGetNodeOid(node_no, exec_node_type), &nodename));
                     sep = ", ";
                 }
             }
@@ -9417,12 +9549,12 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
                 }
 
                 if (es->datanodeinfo.node_index == NULL)
-                    es->datanodeinfo.node_index = (int*)palloc0(sizeof(int) * es->datanodeinfo.len_nodelist);
+                    es->datanodeinfo.node_index = (int *)palloc0(sizeof(int) * es->datanodeinfo.len_nodelist);
                 sep = "";
 
                 /* we show group name information except in single installation group scenario */
                 if (ng_enable_nodegroup_explain()) {
-                    char* group_name = ng_get_dist_group_name(&(en->distribution));
+                    char *group_name = ng_get_dist_group_name(&(en->distribution));
                     appendStringInfo(node_names, "(%s) ", group_name);
                 }
 
@@ -9431,10 +9563,8 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
                     NameData nodename = {{0}};
                     node_no = lfirst_int(lcell);
                     es->datanodeinfo.node_index[i++] = node_no;
-                    appendStringInfo(node_names,
-                        "%s%s",
-                        sep,
-                        get_pgxc_nodename(PGXCNodeGetNodeOid(node_no, exec_node_type), &nodename));
+                    appendStringInfo(node_names, "%s%s", sep,
+                                     get_pgxc_nodename(PGXCNodeGetNodeOid(node_no, exec_node_type), &nodename));
                     sep = ", ";
                 }
             }
@@ -9455,16 +9585,16 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
     if (plan->position == PLAN_ROUTER) {
         StringInfo address = makeStringInfo();
 
-        Plan* fsplan = get_foreign_scan((Plan*)plan);
+        Plan *fsplan = get_foreign_scan((Plan *)plan);
 
-        ServerTypeOption srvtype = getServerType(((ForeignScan*)fsplan)->scan_relid);
+        ServerTypeOption srvtype = getServerType(((ForeignScan *)fsplan)->scan_relid);
         if (T_OBS_SERVER == srvtype || T_TXT_CSV_OBS_SERVER == srvtype) {
-            ComputePoolConfig** conf = get_cp_conninfo();
+            ComputePoolConfig **conf = get_cp_conninfo();
 
             appendStringInfo(address, "%s:%s", conf[0]->cpip, conf[0]->cpport);
         } else {
             // T_HDFS_SERVER
-            DummyServerOptions* options = getDummyServerOption();
+            DummyServerOptions *options = getDummyServerOption();
 
             AssertEreport(options != NULL, MOD_EXECUTOR, "unexpect null value");
 
@@ -9480,15 +9610,15 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
     }
 
     if (en != NULL && en->en_expr && es->pstmt->commandType != CMD_MERGE)
-        show_expression((Node*)en->en_expr, "Node expr", planstate, ancestors, es->verbose, es);
+        show_expression((Node *)en->en_expr, "Node expr", planstate, ancestors, es->verbose, es);
     else if (en != NULL && en->en_expr && es->pstmt->commandType == CMD_MERGE) {
-        ListCell* lc = NULL;
+        ListCell *lc = NULL;
         int cnt = 0;
         StringInfo si = makeStringInfo();
         /* the var in merge into en_expr point to the insert cols on the plan's targetlist */
         foreach (lc, en->en_expr) {
             if (IsA(lfirst(lc), Var)) {
-                Var* var = (Var*)lfirst(lc);
+                Var *var = (Var *)lfirst(lc);
                 /* we show it as $%d as it point to the plan's targetlist */
                 if (cnt == 0)
                     appendStringInfo(si, "$%d", var->varattno);
@@ -9524,9 +9654,9 @@ static void ExplainRemoteQuery(RemoteQuery* plan, PlanState* planstate, List* an
  * XML tag names can't contain white space, so we replace any spaces in
  * "tagname" with dashes.
  */
-static void ExplainXMLTag(const char* tagname, unsigned int flags, ExplainState* es)
+static void ExplainXMLTag(const char *tagname, unsigned int flags, ExplainState *es)
 {
-    const char* s = NULL;
+    const char *s = NULL;
 
     if ((flags & X_NOWHITESPACE) == 0)
         appendStringInfoSpaces(es->str, 2 * es->indent);
@@ -9549,7 +9679,7 @@ static void ExplainXMLTag(const char* tagname, unsigned int flags, ExplainState*
  * in JSON format, the text emitted for each property begins just prior to the
  * preceding line-break (and comma, if applicable).
  */
-static void ExplainJSONLineEnding(ExplainState* es)
+static void ExplainJSONLineEnding(ExplainState *es)
 {
     AssertEreport(es->format == EXPLAIN_FORMAT_JSON, MOD_EXECUTOR, "unexpect explain state format");
     if (linitial_int(es->grouping_stack) != 0)
@@ -9568,7 +9698,7 @@ static void ExplainJSONLineEnding(ExplainState* es)
  * it begins immediately after the "- " that introduces the group.	The first
  * property of the group appears on the same line as the opening "- ".
  */
-static void ExplainYAMLLineStarting(ExplainState* es)
+static void ExplainYAMLLineStarting(ExplainState *es)
 {
     AssertEreport(es->format == EXPLAIN_FORMAT_YAML, MOD_EXECUTOR, "unexpect explain state format");
     if (linitial_int(es->grouping_stack) == 0) {
@@ -9589,19 +9719,19 @@ static void ExplainYAMLLineStarting(ExplainState* es)
  * "true" must be quoted, lest they be interpreted as a hexadecimal or Boolean
  * constant rather than a string.
  */
-static void escape_yaml(StringInfo buf, const char* str)
+static void escape_yaml(StringInfo buf, const char *str)
 {
     escape_json(buf, str);
 }
 
 #ifndef ENABLE_MULTIPLE_NODES
-static void SetPredictor(ExplainState* es, PlanTable* m_planInfo)
+static void SetPredictor(ExplainState *es, PlanTable *m_planInfo)
 {
     if (es->opt_model_name != NULL) {
         /* look up gs_opt_model for predictor's targets */
         char *labels = NULL;
         int nLabel;
-        (void) CheckModelTargets(RLSTM_TEMPLATE_NAME, es->opt_model_name, &labels, &nLabel);
+        (void)CheckModelTargets(RLSTM_TEMPLATE_NAME, es->opt_model_name, &labels, &nLabel);
         for (int i = 0; i < nLabel; ++i) {
             switch (labels[i]) {
                 case gs_opt_model_label_total_time: {
@@ -9625,10 +9755,10 @@ static void SetPredictor(ExplainState* es, PlanTable* m_planInfo)
 }
 #endif
 
-void PlanInformation::init(ExplainState* es, int plansize, int num_nodes, bool query_mem_mode)
+void PlanInformation::init(ExplainState *es, int plansize, int num_nodes, bool query_mem_mode)
 {
     m_detail = es->detail;
-    m_planInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+    m_planInfo = (PlanTable *)palloc0(sizeof(PlanTable));
     m_planInfo->m_costs = es->costs;
     m_planInfo->m_verbose = es->verbose;
     m_planInfo->m_cpu = false;
@@ -9649,15 +9779,15 @@ void PlanInformation::init(ExplainState* es, int plansize, int num_nodes, bool q
     m_planInfo->init(PLANINFO);
     m_planInfo->init_planinfo(plansize);
 
-    m_detailInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+    m_detailInfo = (PlanTable *)palloc0(sizeof(PlanTable));
     m_detailInfo->init(DETAILINFO);
 
-    m_query_summary = (PlanTable*)palloc0(sizeof(PlanTable));
+    m_query_summary = (PlanTable *)palloc0(sizeof(PlanTable));
     m_query_summary->init(QUERYSUMMARY);
 
     /* Init data struct for explain plan. */
     if (es->plan) {
-        m_planTableData = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_planTableData = (PlanTable *)palloc0(sizeof(PlanTable));
         if (IsExplainPlanSelectForUpdateStmt && plansize == 0)
             plansize = 1;
         m_planTableData->init_plan_table_data(plansize);
@@ -9665,10 +9795,10 @@ void PlanInformation::init(ExplainState* es, int plansize, int num_nodes, bool q
         m_planTableData = NULL;
 
     if (es->analyze) {
-        m_staticInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_staticInfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_staticInfo->init(STATICINFO);
 
-        m_profileInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_profileInfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_profileInfo->init(PROFILEINFO);
     } else {
         m_staticInfo = NULL;
@@ -9676,16 +9806,16 @@ void PlanInformation::init(ExplainState* es, int plansize, int num_nodes, bool q
     }
 
     if (es->verbose) {
-        m_verboseInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_verboseInfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_verboseInfo->init(VERBOSEINFO);
     } else
         m_verboseInfo = NULL;
 
     if (es->detail) {
-        m_datanodeInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_datanodeInfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_datanodeInfo->init(DATANODEINFO);
 
-        m_runtimeinfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_runtimeinfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_runtimeinfo->init(RUNTIMEINFO);
         m_runtimeinfo->init_multi_info(es, plansize, num_nodes);
     } else {
@@ -9695,20 +9825,20 @@ void PlanInformation::init(ExplainState* es, int plansize, int num_nodes, bool q
 
     if ((es->cpu || es->buffers) && es->detail == false) {
         m_planInfo->m_cpu = true;
-        m_IOInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_IOInfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_IOInfo->init(IOINFO);
     } else
         m_IOInfo = NULL;
 
     if (es->detail) {
-        m_recursiveInfo = (PlanTable*)palloc0(sizeof(PlanTable));
+        m_recursiveInfo = (PlanTable *)palloc0(sizeof(PlanTable));
         m_recursiveInfo->init(RECURSIVEINFO);
     } else {
         m_recursiveInfo = NULL;
     }
 }
 
-void PlanInformation::append_str_info(const char* data, int id, const char* value)
+void PlanInformation::append_str_info(const char *data, int id, const char *value)
 {
     if (m_verboseInfo)
         appendStringInfo(m_verboseInfo->info_str, data, id, value);
@@ -9716,10 +9846,10 @@ void PlanInformation::append_str_info(const char* data, int id, const char* valu
         appendStringInfo(m_datanodeInfo->info_str, data, id, value);
 }
 
-static void writefile(const char* path, char* text)
+static void writefile(const char *path, char *text)
 {
-    FILE* out_file = NULL;
-    char* line = NULL;
+    FILE *out_file = NULL;
+    char *line = NULL;
     errno_t rc = 0;
 
     if ((out_file = fopen(path, "w")) == NULL) {
@@ -9727,7 +9857,7 @@ static void writefile(const char* path, char* text)
     }
 
     while (*text) {
-        char* eol = NULL;
+        char *eol = NULL;
         int len;
 
         eol = strchr(text, '\n');
@@ -9740,7 +9870,7 @@ static void writefile(const char* path, char* text)
             eol += len;
         }
 
-        line = (char*)palloc0(sizeof(char) * (len + 2));
+        line = (char *)palloc0(sizeof(char) * (len + 2));
         rc = memcpy_s(line, len, text, len);
         securec_check(rc, "\0", "\0");
         line[len] = '\n';
@@ -9762,28 +9892,20 @@ void PlanInformation::dump_runtimeinfo_file()
 {
     int rc = 0;
     char tempdirpath[1024] = {0};
-    FILE* fp = NULL;
+    FILE *fp = NULL;
     bool is_absolute = false;
 
     if (u_sess->attr.attr_common.Perf_log == NULL) {
         is_absolute = is_absolute_path(u_sess->attr.attr_common.Log_directory);
         if (is_absolute)
-            rc = snprintf_s(tempdirpath,
-                sizeof(tempdirpath),
-                sizeof(tempdirpath) - 1,
-                "%s/explain_table_%d.csv",
-                u_sess->attr.attr_common.Log_directory,
-                m_query_id);
+            rc = snprintf_s(tempdirpath, sizeof(tempdirpath), sizeof(tempdirpath) - 1, "%s/explain_table_%d.csv",
+                            u_sess->attr.attr_common.Log_directory, m_query_id);
         else
-            rc = snprintf_s(tempdirpath,
-                sizeof(tempdirpath),
-                sizeof(tempdirpath) - 1,
-                "%s/pg_log/explain_table_%d.csv",
-                g_instance.attr.attr_common.data_directory,
-                m_query_id);
+            rc = snprintf_s(tempdirpath, sizeof(tempdirpath), sizeof(tempdirpath) - 1, "%s/pg_log/explain_table_%d.csv",
+                            g_instance.attr.attr_common.data_directory, m_query_id);
     } else {
-        rc = snprintf_s(
-            tempdirpath, sizeof(tempdirpath), sizeof(tempdirpath) - 1, "%s", u_sess->attr.attr_common.Perf_log);
+        rc = snprintf_s(tempdirpath, sizeof(tempdirpath), sizeof(tempdirpath) - 1, "%s",
+                        u_sess->attr.attr_common.Perf_log);
     }
 
     securec_check_ss(rc, "\0", "\0");
@@ -9843,7 +9965,7 @@ void PlanInformation::free_memory()
         m_recursiveInfo = NULL;
     }
 }
-int PlanInformation::print_plan(Portal portal, DestReceiver* dest)
+int PlanInformation::print_plan(Portal portal, DestReceiver *dest)
 {
     m_count = 0;
     /* Do not print tupDesc and result '(xx rows)' for explain plan */
@@ -9923,7 +10045,7 @@ void PlanTable::init(int plantype)
     }
 }
 
-void PlanTable::init_multi_info(ExplainState* es, int plansize, int num_nodes)
+void PlanTable::init_multi_info(ExplainState *es, int plansize, int num_nodes)
 {
     int i = 0;
     int j = 0;
@@ -9931,13 +10053,13 @@ void PlanTable::init_multi_info(ExplainState* es, int plansize, int num_nodes)
     m_plan_size = plansize;
     m_data_size = num_nodes;
 
-    m_multi_info = (MultiInfo***)palloc0(sizeof(MultiInfo**) * m_data_size);
+    m_multi_info = (MultiInfo ***)palloc0(sizeof(MultiInfo **) * m_data_size);
 
     for (i = 0; i < m_data_size; i++) {
-        m_multi_info[i] = (MultiInfo**)palloc0(sizeof(MultiInfo*) * m_plan_size);
+        m_multi_info[i] = (MultiInfo **)palloc0(sizeof(MultiInfo *) * m_plan_size);
         for (j = 0; j < m_plan_size; j++) {
             int dop = u_sess->instr_cxt.global_instr->getNodeDop(j + 1);
-            m_multi_info[i][j] = (MultiInfo*)palloc0(sizeof(MultiInfo) * dop);
+            m_multi_info[i][j] = (MultiInfo *)palloc0(sizeof(MultiInfo) * dop);
             init_multi_info_data(m_multi_info[i][j], dop);
         }
     }
@@ -9950,11 +10072,11 @@ void PlanTable::init_multi_info(ExplainState* es, int plansize, int num_nodes)
  * @param[IN] dop:  dop of specific operator
  * @return: void
  */
-void PlanTable::init_multi_info_data(MultiInfo* multi_info, int dop)
+void PlanTable::init_multi_info_data(MultiInfo *multi_info, int dop)
 {
     for (int i = 0; i < dop; i++) {
-        multi_info[i].m_Datum = (Datum*)palloc0(EXPLAIN_TOTAL_ATTNUM * sizeof(Datum));
-        multi_info[i].m_Nulls = (bool*)palloc0(EXPLAIN_TOTAL_ATTNUM * sizeof(bool));
+        multi_info[i].m_Datum = (Datum *)palloc0(EXPLAIN_TOTAL_ATTNUM * sizeof(Datum));
+        multi_info[i].m_Nulls = (bool *)palloc0(EXPLAIN_TOTAL_ATTNUM * sizeof(bool));
         for (int j = 0; j < EXPLAIN_TOTAL_ATTNUM; j++)
             multi_info[i].m_Nulls[j] = true;
     }
@@ -9970,18 +10092,18 @@ void PlanTable::init_planinfo(int plansize)
     int costs_num = m_costs ? 1 : 0;
     int verbose_num = m_verbose ? 1 : 0;
 
-    attnum = (PLAN + 1) + analyze_num * NUM_ANALYZE_COLS + \
+    attnum = (PLAN + 1) + analyze_num * NUM_ANALYZE_COLS +
              costs_num * (NUM_COST_COLS + verbose_num * NUM_VER_COLS + m_pred_time + m_pred_row + m_pred_mem);
 
     /* If cost enabled and not query mem mode, don't show estimate_memory column */
     if (m_costs && !m_query_mem_mode)
         attnum = attnum - 1;
 
-    m_data = (Datum**)palloc0(plansize * sizeof(Datum*));
-    m_isnull = (bool**)palloc0(plansize * sizeof(bool*));
+    m_data = (Datum **)palloc0(plansize * sizeof(Datum *));
+    m_isnull = (bool **)palloc0(plansize * sizeof(bool *));
     for (i = 0; i < plansize; i++) {
-        m_data[i] = (Datum*)palloc0(attnum * sizeof(Datum));
-        m_isnull[i] = (bool*)palloc0(attnum * sizeof(bool));
+        m_data[i] = (Datum *)palloc0(attnum * sizeof(Datum));
+        m_isnull[i] = (bool *)palloc0(attnum * sizeof(bool));
 
         for (j = 0; j < attnum; j++)
             m_isnull[i][j] = true;
@@ -10007,13 +10129,13 @@ void PlanTable::init_plan_table_data(int num_plan_nodes)
     m_plan_node_num = num_plan_nodes;
 
     /* palloc memory for every node */
-    m_plan_table = (PlanTableMultiData**)palloc0(num_plan_nodes * sizeof(PlanTableMultiData*));
+    m_plan_table = (PlanTableMultiData **)palloc0(num_plan_nodes * sizeof(PlanTableMultiData *));
 
     for (i = 0; i < num_plan_nodes; i++) {
-        m_plan_table[i] = (PlanTableMultiData*)palloc0(sizeof(PlanTableMultiData));
+        m_plan_table[i] = (PlanTableMultiData *)palloc0(sizeof(PlanTableMultiData));
 
-        m_plan_table[i]->m_datum = (PlanTableData*)palloc0(sizeof(PlanTableData));
-        m_plan_table[i]->m_isnull = (bool*)palloc0(PLANTABLECOLNUM * sizeof(bool));
+        m_plan_table[i]->m_datum = (PlanTableData *)palloc0(sizeof(PlanTableData));
+        m_plan_table[i]->m_isnull = (bool *)palloc0(PLANTABLECOLNUM * sizeof(bool));
 
         /* init m_isnull */
         rc = memset_s(m_plan_table[i]->m_isnull, PLANTABLECOLNUM * sizeof(bool), 1, PLANTABLECOLNUM * sizeof(bool));
@@ -10031,7 +10153,7 @@ TupleDesc PlanTable::getTupleDesc()
     int costs_num = m_costs ? 1 : 0;
     int verbose_num = m_verbose ? 1 : 0;
 
-    attnum = (PLAN + 1) + analyze_num * NUM_ANALYZE_COLS + \
+    attnum = (PLAN + 1) + analyze_num * NUM_ANALYZE_COLS +
              costs_num * (NUM_COST_COLS + verbose_num * NUM_VER_COLS + m_pred_time + m_pred_row + m_pred_mem);
 
     /* If cost enabled and not query mem mode, don't show estimate_memory column */
@@ -10165,7 +10287,7 @@ TupleDesc PlanTable::getTupleDesc_detail()
     return tupdesc;
 }
 
-TupleDesc PlanTable::getTupleDesc(const char* attname)
+TupleDesc PlanTable::getTupleDesc(const char *attname)
 {
     TupleDesc tupdesc;
 
@@ -10198,9 +10320,9 @@ void PlanTable::put(int nodeId, int smpId, int type, Datum value)
     }
 }
 
-void PlanTable::flush(DestReceiver* dest, int plantype)
+void PlanTable::flush(DestReceiver *dest, int plantype)
 {
-    TupOutputState* tstate = NULL;
+    TupOutputState *tstate = NULL;
     tstate = begin_tup_output_tupdesc(dest, m_desc);
     switch (plantype) {
         case PLANINFO:
@@ -10222,9 +10344,9 @@ void PlanTable::flush(DestReceiver* dest, int plantype)
     end_tup_output(tstate);
 }
 
-int PlanTable::print_plan(Portal portal, DestReceiver* dest)
+int PlanTable::print_plan(Portal portal, DestReceiver *dest)
 {
-    TupleTableSlot* slot = NULL;
+    TupleTableSlot *slot = NULL;
     int current_tuple_count = 0;
 
     portal->tupDesc = m_desc;
@@ -10236,15 +10358,12 @@ int PlanTable::print_plan(Portal portal, DestReceiver* dest)
 
     return current_tuple_count;
 }
-void PlanTable::flush_plan(TupOutputState* tstate)
+void PlanTable::flush_plan(TupOutputState *tstate)
 {
     int i = 0;
     for (i = 0; i < m_size; i++) {
-        do_tup_output(tstate,
-            m_data[i],
-            tstate->slot->tts_tupleDescriptor->natts,
-            m_isnull[i],
-            tstate->slot->tts_tupleDescriptor->natts);
+        do_tup_output(tstate, m_data[i], tstate->slot->tts_tupleDescriptor->natts, m_isnull[i],
+                      tstate->slot->tts_tupleDescriptor->natts);
         pfree_ext(m_data[i]);
         pfree_ext(m_isnull[i]);
     }
@@ -10253,13 +10372,13 @@ void PlanTable::flush_plan(TupOutputState* tstate)
     pfree_ext(m_pname.data);
 }
 
-void PlanTable::flush_other(TupOutputState* tstate)
+void PlanTable::flush_other(TupOutputState *tstate)
 {
     m_size = do_text_output_multiline(tstate, info_str->data);
     pfree_ext(info_str->data);
 }
 
-void PlanTable::set_pname(char* data)
+void PlanTable::set_pname(char *data)
 {
     m_pname.data = data;
 }
@@ -10271,7 +10390,7 @@ void PlanTable::set_pname(char* data)
  * @in dop - degree of parallel, 1 means not parallel
  * @out - void
  */
-void PlanTable::set_datanode_name(char* nodename, int smp_idx, int dop)
+void PlanTable::set_datanode_name(char *nodename, int smp_idx, int dop)
 {
     if (dop == 1)
         appendStringInfo(info_str, "%s ", nodename);
@@ -10303,7 +10422,7 @@ template void PlanTable::set_plan_name<true, true>();
  * @in len: transform length.
  * Return: void
  */
-static char* set_strtoupper(const char* str, uint32 len)
+static char *set_strtoupper(const char *str, uint32 len)
 {
     if (str == NULL)
         return NULL;
@@ -10314,7 +10433,7 @@ static char* set_strtoupper(const char* str, uint32 len)
     else
         out_len = strlen(str);
 
-    char* ptrout = (char*)palloc0(out_len + 1);
+    char *ptrout = (char *)palloc0(out_len + 1);
 
     for (uint32 i = 0; i < out_len; i++)
         ptrout[i] = pg_toupper((unsigned char)str[i]);
@@ -10331,18 +10450,15 @@ static char* set_strtoupper(const char* str, uint32 len)
  * @in sessid: session_id.
  * Return: void
  */
-void PlanTable::make_session_id(char* sessid)
+void PlanTable::make_session_id(char *sessid)
 {
     AssertEreport(sessid != NULL, MOD_EXECUTOR, "unexpect null value");
 
     errno_t rc = EOK;
 
-    rc = snprintf_s(sessid,
-        SESSIONIDLEN,
-        SESSIONIDLEN - 1,
-        "%ld.%lu",
-        IS_THREAD_POOL_WORKER ? u_sess->proc_cxt.MyProcPort->SessionStartTime : t_thrd.proc_cxt.MyStartTime,
-        IS_THREAD_POOL_WORKER ? u_sess->session_id : t_thrd.proc_cxt.MyProcPid);
+    rc = snprintf_s(sessid, SESSIONIDLEN, SESSIONIDLEN - 1, "%ld.%lu",
+                    IS_THREAD_POOL_WORKER ? u_sess->proc_cxt.MyProcPort->SessionStartTime : t_thrd.proc_cxt.MyStartTime,
+                    IS_THREAD_POOL_WORKER ? u_sess->session_id : t_thrd.proc_cxt.MyProcPid);
     securec_check_ss(rc, "\0", "\0");
 }
 
@@ -10353,7 +10469,7 @@ void PlanTable::make_session_id(char* sessid)
  * @in es: explain state.
  * Return: void
  */
-void PlanTable::set_plan_table_ids(uint64 query_id, ExplainState* es)
+void PlanTable::set_plan_table_ids(uint64 query_id, ExplainState *es)
 {
     for (int i = 0; i < m_plan_node_num; i++) {
         make_session_id(m_plan_table[i]->m_datum->session_id);
@@ -10366,11 +10482,9 @@ void PlanTable::set_plan_table_ids(uint64 query_id, ExplainState* es)
         if (es->statement_id != NULL) {
             uint32 s_len = strlen(es->statement_id);
             if (s_len > (STMTIDLEN - 1))
-                ereport(ERROR,
-                    (errcode(ERRCODE_DATA_EXCEPTION),
-                        errmsg("statement_id is too long. Input statement_id length=%u, however max length=%d.",
-                            s_len,
-                            STMTIDLEN - 1)));
+                ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
+                                errmsg("statement_id is too long. Input statement_id length=%u, however max length=%d.",
+                                       s_len, STMTIDLEN - 1)));
 
             errno_t rc = strncpy_s(m_plan_table[i]->m_datum->statement_id, STMTIDLEN, es->statement_id, s_len);
             securec_check(rc, "\0", "\0");
@@ -10394,18 +10508,18 @@ void PlanTable::set_plan_table_ids(uint64 query_id, ExplainState* es)
  * @out options: node options.
  * Return: void
  */
-void PlanTable::set_plan_table_streaming_ops(char* pname, char** operation, char** options)
+void PlanTable::set_plan_table_streaming_ops(char *pname, char **operation, char **options)
 {
     errno_t rc = EOK;
-    char* start = NULL;
-    char* end = NULL;
+    char *start = NULL;
+    char *end = NULL;
 
     if (strncasecmp("Streaming", pname, strlen("Streaming")) == 0 ||
         strncasecmp("Vector Streaming", pname, strlen("Vector Streaming")) == 0) {
         start = strrchr(pname, ':') + 2;
         end = strrchr(pname, ')');
         uint32 option_len = end - start;
-        *options = (char*)palloc0(option_len + 1);
+        *options = (char *)palloc0(option_len + 1);
         rc = memcpy_s(*options, option_len + 1, start, option_len);
         securec_check(rc, "\0", "\0");
 
@@ -10423,24 +10537,24 @@ void PlanTable::set_plan_table_streaming_ops(char* pname, char** operation, char
  * @int options: node options.
  * Return: void
  */
-void PlanTable::set_plan_table_join_options(Plan* plan, char** options)
+void PlanTable::set_plan_table_join_options(Plan *plan, char **options)
 {
     switch (nodeTag(plan)) {
         case T_NestLoop:
         case T_VecNestLoop: {
-            Join* nestloop = (Join*)plan;
+            Join *nestloop = (Join *)plan;
             if (nestloop->joinqual == NULL)
                 *options = "CARTESIAN";
         } break;
         case T_VecMergeJoin:
         case T_MergeJoin: {
-            MergeJoin* mergejoin = (MergeJoin*)plan;
+            MergeJoin *mergejoin = (MergeJoin *)plan;
             if (mergejoin->mergeclauses == NULL)
                 *options = "CARTESIAN";
         } break;
         case T_HashJoin:
         case T_VecHashJoin: {
-            HashJoin* hashjoin = (HashJoin*)plan;
+            HashJoin *hashjoin = (HashJoin *)plan;
             if (hashjoin->hashclauses == NULL)
                 *options = "CARTESIAN";
         } break;
@@ -10457,7 +10571,7 @@ void PlanTable::set_plan_table_join_options(Plan* plan, char** options)
  * @int options: node options.
  * Return: void
  */
-void PlanTable::set_plan_table_ops(int plan_node_id, char* operation, char* options)
+void PlanTable::set_plan_table_ops(int plan_node_id, char *operation, char *options)
 {
     errno_t rc = EOK;
 
@@ -10498,7 +10612,7 @@ void PlanTable::set_plan_table_ops(int plan_node_id, char* operation, char* opti
  * @out object_type: object type.
  * Return: void
  */
-void PlanTable::set_object_type(RangeTblEntry* rte, char** object_type)
+void PlanTable::set_object_type(RangeTblEntry *rte, char **object_type)
 {
     if (rte == NULL)
         return;
@@ -10570,8 +10684,8 @@ void PlanTable::set_object_type(RangeTblEntry* rte, char** object_type)
  * @in object_owner: object schema.
  * Return: void
  */
-void PlanTable::set_plan_table_objs(
-    int plan_node_id, const char* object_name, const char* object_type, const char* object_owner)
+void PlanTable::set_plan_table_objs(int plan_node_id, const char *object_name, const char *object_type,
+                                    const char *object_owner)
 {
     AssertEreport(plan_node_id <= m_plan_node_num, MOD_EXECUTOR, "plan_node_id exceeds max value");
 
@@ -10610,8 +10724,8 @@ void PlanTable::set_plan_table_objs(
     if (object_owner != NULL) {
         rc = memset_s(m_plan_table[plan_node_id - 1]->m_datum->object_owner, NAMEDATALEN, '0', NAMEDATALEN);
         securec_check(rc, "\0", "\0");
-        rc = strncpy_s(
-            m_plan_table[plan_node_id - 1]->m_datum->object_owner, NAMEDATALEN, object_owner, NAMEDATALEN - 1);
+        rc = strncpy_s(m_plan_table[plan_node_id - 1]->m_datum->object_owner, NAMEDATALEN, object_owner,
+                       NAMEDATALEN - 1);
         securec_check(rc, "\0", "\0");
 
         m_plan_table[plan_node_id - 1]->m_isnull[PT_OBJECT_OWNER] = false;
@@ -10625,12 +10739,12 @@ void PlanTable::set_plan_table_objs(
  * @in tlist: targetlist of node.
  * Return: void
  */
-void PlanTable::set_plan_table_projection(int plan_node_id, List* tlist)
+void PlanTable::set_plan_table_projection(int plan_node_id, List *tlist)
 {
     if (tlist == NULL)
         return;
 
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
     bool first = true;
 
     /*
@@ -10648,13 +10762,13 @@ void PlanTable::set_plan_table_projection(int plan_node_id, List* tlist)
 
     /* Add the targetlist into column 'projection' till the length exceed PROJECTIONLEN.*/
     foreach (lc, tlist) {
-        if (m_plan_table[plan_node_id - 1]->m_datum->projection->len + strlen((const char*)lfirst(lc)) > PROJECTIONLEN)
+        if (m_plan_table[plan_node_id - 1]->m_datum->projection->len + strlen((const char *)lfirst(lc)) > PROJECTIONLEN)
             break;
 
         if (!first)
             appendStringInfoString(m_plan_table[plan_node_id - 1]->m_datum->projection, ", ");
 
-        appendStringInfoString(m_plan_table[plan_node_id - 1]->m_datum->projection, (const char*)lfirst(lc));
+        appendStringInfoString(m_plan_table[plan_node_id - 1]->m_datum->projection, (const char *)lfirst(lc));
 
         first = false;
     }
@@ -10684,7 +10798,7 @@ void PlanTable::set_plan_table_cost_card(int plan_node_id, double plan_cost, dou
  */
 void PlanTable::insert_plan_table_tuple()
 {
-    const char* plan_table_name = T_PLAN_TABLE_DATA;
+    const char *plan_table_name = T_PLAN_TABLE_DATA;
     Relation plan_table;
     TupleDesc plan_table_des;
     HeapTuple tuple;
@@ -10747,14 +10861,14 @@ void PlanTable::insert_plan_table_tuple()
  * @ in rangeTable: rte list of query
  * Return: return true if there is no rte of 'plan_table_data' in origin FromClause.
  */
-bool checkSelectStmtForPlanTable(List* rangeTable)
+bool checkSelectStmtForPlanTable(List *rangeTable)
 {
     OnlySelectFromPlanTable = false;
 
-    ListCell* lc = NULL;
+    ListCell *lc = NULL;
 
     foreach (lc, rangeTable) {
-        RangeTblEntry* rte = (RangeTblEntry*)lfirst(lc);
+        RangeTblEntry *rte = (RangeTblEntry *)lfirst(lc);
 
         if (rte->relname != NULL && strcasecmp(rte->relname, T_PLAN_TABLE_DATA) == 0)
             return false;
@@ -10772,7 +10886,7 @@ bool checkSelectStmtForPlanTable(List* rangeTable)
  *         return 1 if pass permission check.
  *         return 0 if have no permission.
  */
-int checkPermsForPlanTable(RangeTblEntry* rte)
+int checkPermsForPlanTable(RangeTblEntry *rte)
 {
     /*
      * Note that:
@@ -10788,7 +10902,7 @@ int checkPermsForPlanTable(RangeTblEntry* rte)
         else
             return 0;
     } else if (rte->requiredPerms == (ACL_SELECT + ACL_DELETE) /* for plan_table. */
-             || rte->requiredPerms == ACL_DELETE /* for plan_table_data.*/) {
+               || rte->requiredPerms == ACL_DELETE /* for plan_table_data.*/) {
         /* For delete action */
         if (OnlyDeleteFromPlanTable || superuser())
             return 1;
@@ -10797,13 +10911,13 @@ int checkPermsForPlanTable(RangeTblEntry* rte)
     } else {
         /* For other action(insert/update) will be contorl by rel_acl. */
         return -1;
-    } 
+    }
 }
 
 /* ----------------------End for explain plan----------------------------------- */
-static inline void appendCSV(StringInfo buf, const char* data)
+static inline void appendCSV(StringInfo buf, const char *data)
 {
-    const char* p = data;
+    const char *p = data;
     char c;
 
     /* avoid confusing an empty string with NULL */
@@ -10824,12 +10938,13 @@ static inline void appendCSV(StringInfo buf, const char* data)
  * as arrays of targetlist indexes.  If it's a sort key rather than a group
  * key, also pass sort operators/collations/nullsFirst arrays.
  */
-static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int nkeys, const AttrNumber* keycols,
-    const Oid* sortOperators, const Oid* collations, const bool* nullsFirst, List* ancestors, ExplainState* es)
+static void show_sort_group_keys(PlanState *planstate, const char *qlabel, int nkeys, const AttrNumber *keycols,
+                                 const Oid *sortOperators, const Oid *collations, const bool *nullsFirst,
+                                 List *ancestors, ExplainState *es)
 {
-    Plan* plan = planstate->plan;
-    List* context = NIL;
-    List* result = NIL;
+    Plan *plan = planstate->plan;
+    List *context = NIL;
+    List *result = NIL;
     StringInfoData sortkeybuf;
     bool useprefix = false;
     int keyno;
@@ -10839,14 +10954,14 @@ static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int n
 
     initStringInfo(&sortkeybuf);
 
-    context = deparse_context_for_planstate((Node*)planstate, ancestors, es->rtable);
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, es->rtable);
 
     useprefix = (list_length(es->rtable) > 1 || es->verbose);
 
     for (keyno = 0; keyno < nkeys; keyno++) {
         /* find key expression in tlist */
         AttrNumber keyresno = keycols[keyno];
-        TargetEntry* target = get_tle_by_resno(plan->targetlist, keyresno);
+        TargetEntry *target = get_tle_by_resno(plan->targetlist, keyresno);
 
         /*
          * Start/With support
@@ -10858,18 +10973,18 @@ static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int n
             continue;
         }
 
-        char* exprstr = NULL;
+        char *exprstr = NULL;
 
         if (target == NULL)
             ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("no tlist entry for key %d", keyresno)));
         /* Deparse the expression, showing any top-level cast */
-        exprstr = deparse_expression((Node*)target->expr, context, useprefix, true);
+        exprstr = deparse_expression((Node *)target->expr, context, useprefix, true);
         resetStringInfo(&sortkeybuf);
         appendStringInfoString(&sortkeybuf, exprstr);
         /* Append sort order information, if relevant */
         if (sortOperators != NULL)
-            show_sortorder_options(
-                &sortkeybuf, (Node*)target->expr, sortOperators[keyno], collations[keyno], nullsFirst[keyno]);
+            show_sortorder_options(&sortkeybuf, (Node *)target->expr, sortOperators[keyno], collations[keyno],
+                                   nullsFirst[keyno]);
         /* Emit one property-list item per sort key */
         result = lappend(result, pstrdup(sortkeybuf.data));
     }
@@ -10888,11 +11003,12 @@ static void show_sort_group_keys(PlanState* planstate, const char* qlabel, int n
  * Append nondefault characteristics of the sort ordering of a column to buf
  * (collation, direction, NULLS FIRST/LAST)
  */
-static void show_sortorder_options(StringInfo buf, const Node* sortexpr, Oid sortOperator, Oid collation, bool nullsFirst)
+static void show_sortorder_options(StringInfo buf, const Node *sortexpr, Oid sortOperator, Oid collation,
+                                   bool nullsFirst)
 {
     Oid sortcoltype = exprType(sortexpr);
     bool reverse = false;
-    TypeCacheEntry* typentry = NULL;
+    TypeCacheEntry *typentry = NULL;
 
     typentry = lookup_type_cache(sortcoltype, TYPECACHE_LT_OPR | TYPECACHE_GT_OPR);
 
@@ -10902,11 +11018,11 @@ static void show_sortorder_options(StringInfo buf, const Node* sortexpr, Oid sor
      * that collation, but it's hard to distinguish that here.
      */
     if (OidIsValid(collation) && collation != DEFAULT_COLLATION_OID) {
-        char* collname = get_collation_name(collation);
+        char *collname = get_collation_name(collation);
 
         if (collname == NULL)
             ereport(ERROR,
-                (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for collation %u", collation)));
+                    (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for collation %u", collation)));
         appendStringInfo(buf, " COLLATE %s", quote_identifier(collname));
     }
 
@@ -10915,11 +11031,11 @@ static void show_sortorder_options(StringInfo buf, const Node* sortexpr, Oid sor
         appendStringInfoString(buf, " DESC");
         reverse = true;
     } else if (sortOperator != typentry->lt_opr) {
-        char* opname = get_opname(sortOperator);
+        char *opname = get_opname(sortOperator);
 
         if (opname == NULL)
-            ereport(ERROR,
-                (errcode(ERRCODE_CACHE_LOOKUP_FAILED), errmsg("cache lookup failed for operator %u", sortOperator)));
+            ereport(ERROR, (errcode(ERRCODE_CACHE_LOOKUP_FAILED),
+                            errmsg("cache lookup failed for operator %u", sortOperator)));
         appendStringInfo(buf, " USING %s", opname);
         /* Determine whether operator would be considered ASC or DESC */
         (void)get_equality_op_for_ordering_op(sortOperator, &reverse);
@@ -10944,22 +11060,22 @@ static void show_sortorder_options(StringInfo buf, const Node* sortexpr, Oid sor
  *
  * Return: void
  */
-static void show_tablesample(Plan* plan, PlanState* planstate, List* ancestors, ExplainState* es)
+static void show_tablesample(Plan *plan, PlanState *planstate, List *ancestors, ExplainState *es)
 {
-    List* context = NIL;
+    List *context = NIL;
     bool useprefix = false;
-    const char* method_name = NULL;
-    List* params = NIL;
-    char* repeatable = NULL;
-    ListCell* lc = NULL;
-    TableSampleClause* tsc = ((Scan*)plan)->tablesample;
+    const char *method_name = NULL;
+    List *params = NIL;
+    char *repeatable = NULL;
+    ListCell *lc = NULL;
+    TableSampleClause *tsc = ((Scan *)plan)->tablesample;
 
     if (tsc == NULL) {
         return;
     }
 
     /* Set up deparsing context */
-    context = deparse_context_for_planstate((Node*)planstate, ancestors, es->rtable);
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, es->rtable);
     useprefix = list_length(es->rtable) > 1;
 
     /* Get the tablesample method name */
@@ -10968,12 +11084,12 @@ static void show_tablesample(Plan* plan, PlanState* planstate, List* ancestors, 
 
     /* Deparse parameter expressions */
     foreach (lc, tsc->args) {
-        Node* arg = (Node*)lfirst(lc);
+        Node *arg = (Node *)lfirst(lc);
 
         params = lappend(params, deparse_expression(arg, context, useprefix, false));
     }
     if (tsc->repeatable) {
-        repeatable = deparse_expression((Node*)tsc->repeatable, context, useprefix, false);
+        repeatable = deparse_expression((Node *)tsc->repeatable, context, useprefix, false);
     } else {
         repeatable = NULL;
     }
@@ -10987,7 +11103,7 @@ static void show_tablesample(Plan* plan, PlanState* planstate, List* ancestors, 
         foreach (lc, params) {
             if (!first)
                 appendStringInfoString(es->str, ", ");
-            appendStringInfoString(es->str, (const char*)lfirst(lc));
+            appendStringInfoString(es->str, (const char *)lfirst(lc));
             first = false;
         }
         appendStringInfoChar(es->str, ')');
@@ -11010,15 +11126,15 @@ void PlanTable::flush_data_to_file()
     int i = 0;
     int j = 0;
     int k = 0;
-    Datum* values = NULL;
-    bool* nulls = NULL;
+    Datum *values = NULL;
+    bool *nulls = NULL;
     bool is_null = false;
     Datum data;
     Datum val;
     Oid typoid;
     Oid foutoid;
     bool typisvarlena = false;
-    char* result = NULL;
+    char *result = NULL;
     bool from_datanode = false;
     int node_num = 0;
 
@@ -11076,8 +11192,8 @@ void PlanTable::flush_data_to_file()
 /*
  * Insert obs scan information into pg_obsscaninfo table
  */
-void insert_obsscaninfo(
-    uint64 queryid, const char* rel_name, int64 file_count, double scan_data_size, double total_time, int format)
+void insert_obsscaninfo(uint64 queryid, const char *rel_name, int64 file_count, double scan_data_size,
+                        double total_time, int format)
 {
     Relation pgobsscaninforel;
     HeapTuple htup;
@@ -11086,8 +11202,8 @@ void insert_obsscaninfo(
     int i;
     TimestampTz ts = GetCurrentTimestamp();
     StringInfo insert_stmt1, insert_stmt2;
-    const char* billing_info = "unbilled";
-    char* file_format = NULL;
+    const char *billing_info = "unbilled";
+    char *file_format = NULL;
 
     if (format == 0)
         file_format = "orc";
@@ -11138,29 +11254,17 @@ void insert_obsscaninfo(
 
     insert_stmt1 = makeStringInfo();
     appendStringInfo(insert_stmt1,
-        "insert into pg_obsscaninfo values (%lu, '%s', '%s', '%s', '%s', '%lf', %ld, %lf, '%s');",
-        queryid, /* we delibrately let it as a int64 due to unsupporting uint64 in pg */
-        u_sess->misc_cxt.CurrentUserName,
-        rel_name,
-        file_format,
-        timestamptz_to_str(ts),
-        total_time,
-        file_count,
-        scan_data_size,
-        billing_info);
+                     "insert into pg_obsscaninfo values (%lu, '%s', '%s', '%s', '%s', '%lf', %ld, %lf, '%s');",
+                     queryid, /* we delibrately let it as a int64 due to unsupporting uint64 in pg */
+                     u_sess->misc_cxt.CurrentUserName, rel_name, file_format, timestamptz_to_str(ts), total_time,
+                     file_count, scan_data_size, billing_info);
 
     insert_stmt2 = makeStringInfo();
     appendStringInfo(insert_stmt2,
-        "insert into gs_obsscaninfo values (%lu, '%s', '%s', '%s', '%s', '%lf', %ld, %lf, '%s');",
-        queryid, /* we delibrately let it as a int64 due to unsupporting uint64 in pg */
-        u_sess->misc_cxt.CurrentUserName,
-        rel_name,
-        file_format,
-        timestamptz_to_str(ts),
-        total_time,
-        file_count,
-        scan_data_size,
-        billing_info);
+                     "insert into gs_obsscaninfo values (%lu, '%s', '%s', '%s', '%s', '%lf', %ld, %lf, '%s');",
+                     queryid, /* we delibrately let it as a int64 due to unsupporting uint64 in pg */
+                     u_sess->misc_cxt.CurrentUserName, rel_name, file_format, timestamptz_to_str(ts), total_time,
+                     file_count, scan_data_size, billing_info);
 
     elog(DEBUG1, "%s", insert_stmt1->data);
     elog(DEBUG1, "%s", insert_stmt2->data);
@@ -11186,13 +11290,13 @@ void insert_obsscaninfo(
         MemoryContextSwitchTo(current_ctx);
 
         /* Save error info */
-        ErrorData* edata = CopyErrorData();
+        ErrorData *edata = CopyErrorData();
 
         FlushErrorState();
         ereport(LOG,
-            (errcode(ERRCODE_OPERATE_FAILED),
-                errmsg("Synchronize OBS scan info to other coordinator failed, OBS billing info may be out of sync"),
-                errdetail("Synchronize fail reason: %s.", edata->message)));
+                (errcode(ERRCODE_OPERATE_FAILED),
+                 errmsg("Synchronize OBS scan info to other coordinator failed, OBS billing info may be out of sync"),
+                 errdetail("Synchronize fail reason: %s.", edata->message)));
 
         FreeErrorData(edata);
     }
@@ -11204,7 +11308,7 @@ void insert_obsscaninfo(
 
 static void show_unique_check_info(PlanState *planstate, ExplainState *es)
 {
-    Agg *aggnode = (Agg *) planstate->plan;
+    Agg *aggnode = (Agg *)planstate->plan;
 
     if (aggnode->unique_check) {
         const char *str = "Unique Check Required";
@@ -11212,8 +11316,7 @@ static void show_unique_check_info(PlanState *planstate, ExplainState *es)
         if (t_thrd.explain_cxt.explain_perf_mode != EXPLAIN_NORMAL && es->planinfo->m_verboseInfo) {
             es->planinfo->m_verboseInfo->set_plan_name<false, true>();
             appendStringInfo(es->planinfo->m_verboseInfo->info_str, "%s\n", str);
-        }
-        else {
+        } else {
             if (es->format == EXPLAIN_FORMAT_TEXT && !es->wlm_statistics_plan_max_digit) {
                 appendStringInfoSpaces(es->str, es->indent * 2);
                 appendStringInfo(es->str, "%s\n", str);
@@ -11222,16 +11325,16 @@ static void show_unique_check_info(PlanState *planstate, ExplainState *es)
     }
 }
 
-static void show_ndpplugin_statistic(ExplainState *es, PlanState* planstate, StringInfo str, bool is_pretty)
+static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, StringInfo str, bool is_pretty)
 {
-    Plan* plan = planstate->plan;
+    Plan *plan = planstate->plan;
     if (!plan->ndp_pushdown_optimized &&
         !(plan->lefttree && plan->type == T_Agg && plan->lefttree->ndp_pushdown_optimized &&
-        reinterpret_cast<NdpScanCondition*>(plan->lefttree->ndp_pushdown_condition)->plan == plan)) {
+          reinterpret_cast<NdpScanCondition *>(plan->lefttree->ndp_pushdown_condition)->plan == plan)) {
         return;
     }
 
-    TableScanDesc desc = reinterpret_cast<ScanState*>(planstate)->ss_currentScanDesc;
+    TableScanDesc desc = reinterpret_cast<ScanState *>(planstate)->ss_currentScanDesc;
     if (desc && !desc->ndp_pushdown_optimized) {
         return;
     }
@@ -11246,7 +11349,7 @@ static void show_ndpplugin_statistic(ExplainState *es, PlanState* planstate, Str
         return;
     }
 
-    Instrumentation* instr;
+    Instrumentation *instr;
     int pushdownPage = 0;
     int normalPage = 0;
     int ndpPage = 0;
@@ -11255,7 +11358,7 @@ static void show_ndpplugin_statistic(ExplainState *es, PlanState* planstate, Str
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
         u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
         for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
-            ThreadInstrumentation* threadinstr =
+            ThreadInstrumentation *threadinstr =
                 u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
             if (threadinstr == NULL)
                 continue;
@@ -11275,10 +11378,11 @@ static void show_ndpplugin_statistic(ExplainState *es, PlanState* planstate, Str
     normalPage += instr->ndp_sendback_page;
     ndpPage += instr->ndp_handled;
 
-    appendStringInfo(es->str, " (total page: %d, back to normal page: %d, ndp handled: %d)", pushdownPage, normalPage, ndpPage);
+    appendStringInfo(es->str, " (total page: %d, back to normal page: %d, ndp handled: %d)", pushdownPage, normalPage,
+                     ndpPage);
 }
 
-void ExplainDatumProperty(char const *name, Datum const value, Oid const type, ExplainState* es)
+void ExplainDatumProperty(char const *name, Datum const value, Oid const type, ExplainState *es)
 {
     Datum output_datum = 0;
     char const *output = nullptr;
@@ -11318,7 +11422,7 @@ void ExplainDatumProperty(char const *name, Datum const value, Oid const type, E
  * this function explains a group of model information (recursively if necessary)
  * as provided by the list
  */
-ListCell* ExplainTrainInfoGroup(List const* group, ExplainState *es, bool const group_opened)
+ListCell *ExplainTrainInfoGroup(List const *group, ExplainState *es, bool const group_opened)
 {
     ListCell *lc = nullptr;
     TrainingInfo *train_info = nullptr;
@@ -11328,7 +11432,7 @@ ListCell* ExplainTrainInfoGroup(List const* group, ExplainState *es, bool const 
      * recursive calls that will print nested sub-groups (by properly
      * opening and closing them)
      */
-    foreach(lc, group) {
+    foreach (lc, group) {
         train_info = lfirst_node(TrainingInfo, lc);
         if (train_info->open_group) {
             /*
@@ -11339,15 +11443,15 @@ ListCell* ExplainTrainInfoGroup(List const* group, ExplainState *es, bool const 
 
             if (!train_info->name)
                 ereport(ERROR, (errmodule(MOD_DB4AI), errcode(ERRCODE_SYNTAX_ERROR),
-                        errmsg("the name of a group cannot be empty (when opening)")));
+                                errmsg("the name of a group cannot be empty (when opening)")));
 
             // open the group at the output
             ExplainOpenGroup(train_info->name, train_info->name, true, es);
             // here comes a recursive call to print the group
             List next_group;
-            next_group.length = 0; // not needed for us, not properly set (you are warned)
+            next_group.length = 0;  // not needed for us, not properly set (you are warned)
             next_group.type = group->type;
-            next_group.head = lnext(lc); // next group continues with the first element of the group
+            next_group.head = lnext(lc);  // next group continues with the first element of the group
             next_group.tail = group->tail;
 
             /*
@@ -11361,7 +11465,7 @@ ListCell* ExplainTrainInfoGroup(List const* group, ExplainState *es, bool const 
              */
             if (!lc)
                 ereport(ERROR, (errmodule(MOD_DB4AI), errcode(ERRCODE_SYNTAX_ERROR),
-                        errmsg("group of name \"%s\" was not closed", train_info->name)));
+                                errmsg("group of name \"%s\" was not closed", train_info->name)));
 
             auto current_train_info = lfirst_node(TrainingInfo, lc);
 
@@ -11371,8 +11475,8 @@ ListCell* ExplainTrainInfoGroup(List const* group, ExplainState *es, bool const 
              */
             if (strcmp(train_info->name, current_train_info->name) != 0)
                 ereport(ERROR, (errmodule(MOD_DB4AI), errcode(ERRCODE_SYNTAX_ERROR),
-                        errmsg("group of name \"%s\" was not properly closed, closing group name was \"%s\"",
-                               train_info->name, current_train_info->name)));
+                                errmsg("group of name \"%s\" was not properly closed, closing group name was \"%s\"",
+                                       train_info->name, current_train_info->name)));
             continue;
         } else if (train_info->close_group) {
             /*
@@ -11380,13 +11484,14 @@ ListCell* ExplainTrainInfoGroup(List const* group, ExplainState *es, bool const 
              * parent call)
              */
             if (!group_opened)
-                ereport(ERROR, (errmodule(MOD_DB4AI), errcode(ERRCODE_SYNTAX_ERROR),
-                        errmsg("badly formed group of name \"%s\" of training information (opening group not found)",
-                               train_info->name)));
+                ereport(ERROR,
+                        (errmodule(MOD_DB4AI), errcode(ERRCODE_SYNTAX_ERROR),
+                         errmsg("badly formed group of name \"%s\" of training information (opening group not found)",
+                                train_info->name)));
 
             if (!train_info->name)
                 ereport(ERROR, (errmodule(MOD_DB4AI), errcode(ERRCODE_SYNTAX_ERROR),
-                        errmsg("the name of a group cannot be empty (when closing)")));
+                                errmsg("the name of a group cannot be empty (when closing)")));
 
             ExplainCloseGroup(train_info->name, train_info->name, true, es);
             // we return the closing ListCell
@@ -11448,8 +11553,8 @@ void do_model_explain(ExplainState *es, const Model *model)
             break;
         default:
             ereport(ERROR, (errmodule(MOD_DB4AI), errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("invalid return type (%d) for model of name \"%s\"", model->return_type,
-                           model->model_name)));
+                            errmsg("invalid return type (%d) for model of name \"%s\"", model->return_type,
+                                   model->model_name)));
     }
     ExplainPropertyText("Return type", return_type_str, es);
     ExplainPropertyFloat("Pre-processing time", model->pre_time_secs, 6, es);
@@ -11462,7 +11567,7 @@ void do_model_explain(ExplainState *es, const Model *model)
      * hyper-parameters are now output
      */
     ExplainOpenGroup("Hyper-parameters", "Hyper-parameters", true, es);
-    foreach(lc, model->hyperparameters) {
+    foreach (lc, model->hyperparameters) {
         auto hyperparameter = lfirst_node(Hyperparameter, lc);
         ExplainDatumProperty(hyperparameter->name, hyperparameter->value, hyperparameter->type, es);
     }
@@ -11472,7 +11577,7 @@ void do_model_explain(ExplainState *es, const Model *model)
      * scores are now output
      */
     ExplainOpenGroup("Scores", "Scores", true, es);
-    foreach(lc, model->scores) {
+    foreach (lc, model->scores) {
         auto training_score = lfirst_node(TrainingScore, lc);
         ExplainPropertyFloat(training_score->name, training_score->value, 10, es);
     }

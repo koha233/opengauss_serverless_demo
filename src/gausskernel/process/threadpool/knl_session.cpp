@@ -1478,8 +1478,10 @@ static void knl_u_plan_info_init(knl_plan_info_context *plan_info_cxt)
     plan_info_cxt->query_id = -1;
     plan_info_cxt->plan_id = -1;
     plan_info_cxt->dop = 1;
+    plan_info_cxt->io_time = 0;
     plan_info_cxt->execution_time = 0;
     plan_info_cxt->peak_mem = 0;
+    plan_info_cxt->estimate_costs = 0;
     plan_info_cxt->estimate_rows =0;
     plan_info_cxt->actural_rows = 0;
 }
@@ -1492,7 +1494,6 @@ static void knl_u_query_info_init(knl_query_info_context *query_info_cxt)
     query_info_cxt->estimate_exec_time = 0;
     query_info_cxt->peak_mem = 0;
     query_info_cxt->estimate_query_mem =0;
-    query_info_cxt->estimate_work_mem = 0;
     query_info_cxt->io_time = 0;
     query_info_cxt->cpu_time = 0;
     query_info_cxt->scan_rows = 0;

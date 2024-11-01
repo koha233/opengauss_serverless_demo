@@ -3013,9 +3013,11 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         (*receiver->rDestroy)(receiver);
         if(portal->queryDesc != NULL){
             PlanState *ps = portal->queryDesc->planstate;
+            query_info->peak_mem = (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024);
         }
         PortalDrop(portal, false);
         query_info->execution_time = elapsed_time(&exec_starttime);
+        query_info->estimate_query_mem = u_sess->opt_cxt.op_work_mem;
 
         CleanHotkeyCandidates(true);
 

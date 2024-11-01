@@ -498,6 +498,8 @@ extern void ExplainOnePlan(
     DestReceiver *dest, ParamListInfo params);
 
 extern void ExplainPrintPlan(ExplainState* es, QueryDesc* queryDesc);
+extern void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc* queryDesc);
+extern void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors, const char *relationship, const char *plan_name);
 
 extern void ExplainQueryText(ExplainState* es, QueryDesc* queryDesc);
 

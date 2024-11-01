@@ -3014,9 +3014,12 @@ typedef struct knl_plan_info_context{
     std::string operator_type;
     std::string strategy;
     double execution_time;
+    double estimate_costs;
+    double io_time;
     int estimate_rows;
     int actural_rows;
     int64 peak_mem;
+    std::vector<std::string> table_names;
 } knl_plan_info_context;
 
 typedef struct knl_query_info_context{
@@ -3027,7 +3030,6 @@ typedef struct knl_query_info_context{
     double estimate_exec_time;
     int64 peak_mem;
     int estimate_query_mem;
-    int estimate_work_mem;
     double io_time;
     double cpu_time;
     int scan_rows;
@@ -3035,6 +3037,7 @@ typedef struct knl_query_info_context{
     int join_num;
     int agg_num;
     bool is_user_sql;
+    std::vector<std::string> table_names;
     std::vector<knl_plan_info_context> Plans;
 } knl_query_info_context;
 
