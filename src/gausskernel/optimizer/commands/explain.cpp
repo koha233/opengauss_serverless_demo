@@ -1390,6 +1390,25 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
 }
 
+void ResetQueryInfo(knl_query_info_context *query_info){
+    query_info->query_id = -1;
+    query_info->dop = 1;
+    query_info->execution_time = 0;
+    query_info->estimate_exec_time = 0;
+    query_info->peak_mem = 0;
+    query_info->estimate_query_mem =0;
+    query_info->io_time = 0;
+    query_info->cpu_time = 0;
+    query_info->scan_rows = 0;
+    query_info->operator_num = 0;
+    query_info->join_num = 0;
+    query_info->agg_num = 0;
+    query_info->is_user_sql=0;
+    query_info->query_string="";
+    query_info->table_names.clear();
+    query_info->Plans.clear();
+}
+
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
                      const char *relationship, const char *plan_name)
 {
@@ -1544,12 +1563,14 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
      * haven't done ExecutorEnd yet.  This is pretty grotty ...
      */
     if (planstate->instrument) {
+        Instrumentation * instrument = planstate->instrument;
         InstrEndLoop(planstate->instrument);
-        const double startup_sec = 1000.0 * planstate->instrument->startup;
-        const double total_sec = 1000.0 * planstate->instrument->total;
-        double rows = planstate->instrument->ntuples;
+        const double startup_sec = 1000.0 * instrument->startup;
+        const double total_sec = 1000.0 * instrument->total;
+        double rows = instrument->ntuples;
         plan_info.actural_rows = rows;
         plan_info.execution_time = total_sec - startup_sec;
+        plan_info.peak_mem =instrument->memoryinfo.peakOpMemory/1024;
     }
 
     // /* target list */
