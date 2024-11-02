@@ -1283,9 +1283,9 @@ void ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es
 
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Query Id: %lu\n", u_sess->debug_query_id);
                 if (MEMORY_TRACKING_QUERY_PEAK)
-                    appendStringInfo(es->str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
+                    appendStringInfo(es->planinfo->m_query_summary->info_str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
                                      (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024));
-                es->planinfo->m_query_summary->m_size = 0;
+                // es->planinfo->m_query_summary->m_size = 0;
             }
         } else
             ExplainPropertyFloat("Total Runtime", 1000.0 * totaltime, 3, es);
@@ -1439,8 +1439,12 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
 
     /* Fetch plan node's plain text info */
     GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
-    plan_info.operator_type = sname;
-    plan_info.strategy = strategy;
+    if(sname != NULL){
+        plan_info.operator_type = sname;
+    }
+    if(strategy != NULL){
+        plan_info.strategy = strategy;
+    }
     std::string table_name;
 
     switch (nodeTag(plan)) {
@@ -1582,9 +1586,13 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     //     show_plan_execnodes(planstate, es);
     // }
     /* quals, sort keys, etc */
-    const BufferUsage *buf_usage = &planstate->instrument->bufusage;
-    plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
-    plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
+    // const BufferUsage *buf_usage = &planstate->instrument->bufusage;
+    // bool has_timing = (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) || !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time));
+    // if(has_timing){
+    //     plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
+    //     plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
+    // }
+
     /* if 'cpu' is specified, display the cpu cost */
     // uint64 proRows = 0;
     // double incCycles = 0.0;
@@ -1608,6 +1616,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     // ExplainPropertyLong("Exclusive Cycles Per Row", proRows != 0 ? (long)(exCycles / proRows) : 0, es);
     // ExplainPropertyLong("Exclusive Cycles", (long)exCycles, es);
     // ExplainPropertyLong("Inclusive Cycles", (long)incCycles, es);
+    plan_info.plan_id = plan->plan_node_id;
     query_info->Plans.push_back(plan_info);
 
 runnext:
