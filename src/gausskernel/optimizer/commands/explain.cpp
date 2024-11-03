@@ -190,7 +190,8 @@ static void show_on_duplicate_info(ModifyTableState *mtstate, ExplainState *es, 
 #ifndef PGXC
 static void show_modifytable_info(ModifyTableState *mtstate, ExplainState *es);
 #endif /* PGXC */
-static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans, PlanState **planstates, List *ancestors);
+static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans,
+                               PlanState **planstates, List *ancestors);
 static void ExplainMemberNodes(const List *plans, PlanState **planstates, List *ancestors, ExplainState *es);
 static void ExplainSubPlans(List *plans, List *ancestors, const char *relationship, ExplainState *es);
 static void ExplainProperty(const char *qlabel, const char *value, bool numeric, ExplainState *es);
@@ -1283,7 +1284,8 @@ void ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es
 
                 appendStringInfo(es->planinfo->m_query_summary->info_str, "Query Id: %lu\n", u_sess->debug_query_id);
                 if (MEMORY_TRACKING_QUERY_PEAK)
-                    appendStringInfo(es->planinfo->m_query_summary->info_str, "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
+                    appendStringInfo(es->planinfo->m_query_summary->info_str,
+                                     "Total runtime: %.3f ms, Peak Memory: %ld KB\n", 1000.0 * totaltime,
                                      (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024));
                 // es->planinfo->m_query_summary->m_size = 0;
             }
@@ -1384,27 +1386,31 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
         RangeTblEntry *rte = (RangeTblEntry *)lfirst(lc);
         char *table_name = get_rel_name(rte->relid);
         if (table_name != NULL) {
-            query_info->table_names.push_back(table_name);
+            if (!query_info->table_names.empty()) {
+                query_info->table_names += ",";  // 添加逗号和空格作为分隔符
+            }
+            query_info->table_names += table_name;
         }
     }
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
 }
 
-void ResetQueryInfo(knl_query_info_context *query_info){
+void ResetQueryInfo(knl_query_info_context *query_info)
+{
     query_info->query_id = -1;
     query_info->dop = 1;
     query_info->execution_time = 0;
     query_info->estimate_exec_time = 0;
     query_info->peak_mem = 0;
-    query_info->estimate_query_mem =0;
+    query_info->estimate_query_mem = 0;
     query_info->io_time = 0;
     query_info->cpu_time = 0;
     query_info->scan_rows = 0;
     query_info->operator_num = 0;
     query_info->join_num = 0;
     query_info->agg_num = 0;
-    query_info->is_user_sql=0;
-    query_info->query_string="";
+    query_info->is_user_sql = 0;
+    query_info->query_string.clear();
     query_info->table_names.clear();
     query_info->Plans.clear();
 }
@@ -1418,9 +1424,9 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     char *strategy = NULL;
     char *operation = NULL;
     bool haschildren = false;
-    //int plan_node_id = plan->plan_node_id;
-    //int parentid = plan->parent_node_id;
-    //StringInfo tmpName = nullptr;
+    // int plan_node_id = plan->plan_node_id;
+    // int parentid = plan->parent_node_id;
+    // StringInfo tmpName = nullptr;
 
     /* For plan_table column */
     char *pt_operation = NULL;
@@ -1432,17 +1438,17 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.execution_time = 0;
     plan_info.peak_mem = 0;
     plan_info.estimate_costs = 0;
-    plan_info.estimate_rows =0;
+    plan_info.estimate_rows = 0;
     plan_info.actural_rows = 0;
     plan_info.query_id = query_info->query_id;
     plan_info.io_time = 0;
 
     /* Fetch plan node's plain text info */
     GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
-    if(sname != NULL){
+    if (sname != NULL) {
         plan_info.operator_type = sname;
     }
-    if(strategy != NULL){
+    if (strategy != NULL) {
         plan_info.strategy = strategy;
     }
     std::string table_name;
@@ -1472,13 +1478,19 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             auto relid = ((Scan *)plan)->scanrelid;
             if (relid > 0) {
                 if (GetTargetRel(plan, relid, rtable, table_name, false)) {
-                    plan_info.table_names.push_back(table_name);
+                    if (!plan_info.table_names.empty()) {
+                        plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                    }
+                    plan_info.table_names += table_name;
                 }
             }
         } break;
         case T_IndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
-                plan_info.table_names.push_back(table_name);
+                if (!plan_info.table_names.empty()) {
+                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                }
+                plan_info.table_names += table_name;
             }
         } break;
 #ifdef USE_SPQ
@@ -1486,14 +1498,20 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
 #endif
         case T_IndexOnlyScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
-                plan_info.table_names.push_back(table_name);
+                if (!plan_info.table_names.empty()) {
+                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                }
+                plan_info.table_names += table_name;
             }
         } break;
         case T_BitmapIndexScan: {
         } break;
         case T_CStoreIndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
-                plan_info.table_names.push_back(table_name);
+                if (!plan_info.table_names.empty()) {
+                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                }
+                plan_info.table_names += table_name;
             }
         } break;
         case T_CStoreIndexCtidScan: {
@@ -1504,7 +1522,10 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             bool multiTarget = (list_length((List *)linitial(modifyplan->resultRelations)) > 1);
             Index rti = (Index)linitial_int((List *)linitial(modifyplan->resultRelations));
             if (GetTargetRel(plan, rti, rtable, table_name, multiTarget)) {
-                plan_info.table_names.push_back(table_name);
+                if (!plan_info.table_names.empty()) {
+                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                }
+                plan_info.table_names += table_name;
             }
         } break;
         case T_NestLoop:
@@ -1567,14 +1588,14 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
      * haven't done ExecutorEnd yet.  This is pretty grotty ...
      */
     if (planstate->instrument) {
-        Instrumentation * instrument = planstate->instrument;
+        Instrumentation *instrument = planstate->instrument;
         InstrEndLoop(planstate->instrument);
         const double startup_sec = 1000.0 * instrument->startup;
         const double total_sec = 1000.0 * instrument->total;
         double rows = instrument->ntuples;
         plan_info.actural_rows = rows;
         plan_info.execution_time = total_sec - startup_sec;
-        plan_info.peak_mem =instrument->memoryinfo.peakOpMemory/1024;
+        plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
     }
 
     // /* target list */
@@ -1587,8 +1608,8 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     // }
     /* quals, sort keys, etc */
     // const BufferUsage *buf_usage = &planstate->instrument->bufusage;
-    // bool has_timing = (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) || !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time));
-    // if(has_timing){
+    // bool has_timing = (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) ||
+    // !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time)); if(has_timing){
     //     plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
     //     plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
     // }
@@ -1722,7 +1743,7 @@ runnext:
     }
 
     /* subPlan-s */
-    if (planstate->subPlan){
+    if (planstate->subPlan) {
         ListCell *lst = NULL;
         foreach (lst, planstate->subPlan) {
             SubPlanState *sps = (SubPlanState *)lfirst(lst);
@@ -1759,7 +1780,6 @@ runnext:
     //     /* Step 4: Set projection for plan table. */
     //     show_plan_tlist(planstate, ancestors, es);
     // }
-
 }
 
 /*
@@ -8829,7 +8849,8 @@ static void ExplainMemberNodes(const List *plans, PlanState **planstates, List *
     es->from_dn = old_flag;
 }
 
-static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans, PlanState **planstates, List *ancestors)
+static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans,
+                               PlanState **planstates, List *ancestors)
 {
     int nplans = list_length(plans);
     for (int j = 0; j < nplans; j++) {
