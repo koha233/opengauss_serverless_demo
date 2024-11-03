@@ -198,6 +198,7 @@ extern int optreset; /* might not be declared by system headers */
 #include "replication/walreceiver.h"
 #include "libpq/libpq-int.h"
 #include "tcop/autonomoustransaction.h"
+#include "workload/commgr.h"
 
 THR_LOCAL VerifyCopyCommandIsReparsed copy_need_to_be_reparse = NULL;
 
@@ -1542,7 +1543,7 @@ List *pg_plan_queries(List *querytrees, int cursorOptions, ParamListInfo boundPa
             }
 #endif
             ps = (PlannedStmt *)stmt;
-            u_sess->query_info_cxt.query_id = ps->queryId;
+            u_sess->query_info_cxt->query_id = ps->queryId;
             check_plan_mergeinto_replicate(ps, ERROR);
 
             if (ps != NULL)
@@ -2386,7 +2387,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
     AttachInfoContext attachInfoCtx = {0};
     List *parsetree_list = NULL;
     ListCell *parsetree_item = NULL;
-    knl_query_info_context *query_info = &u_sess->query_info_cxt;
+    knl_query_info_context *query_info = u_sess->query_info_cxt.get();
     bool save_log_statement_stats = u_sess->attr.attr_common.log_statement_stats;
     bool was_logged = false;
     bool isTopLevel = false;
@@ -3018,7 +3019,11 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         PortalDrop(portal, false);
         query_info->execution_time = elapsed_time(&exec_starttime);
         query_info->estimate_query_mem = u_sess->opt_cxt.op_work_mem;
-        // ResetQueryInfo(query_info);
+        if(query_info->is_user_sql){
+            std::string info_sql = GenerateInfoSql(query_info);
+            WLMRemoteNodeExecuteSql(info_sql.c_str());
+        }
+        ResetQueryInfo(query_info);
         CleanHotkeyCandidates(true);
 
         /* restore is_allow_commit_rollback */
@@ -9292,7 +9297,7 @@ int PostgresMain(int argc, char *argv[], const char *dbname, const char *usernam
                     u_sess->exec_cxt.RetryController->stub_.ECodeStubTest();
                 }
 #endif
-                u_sess->query_info_cxt.is_user_sql = true;
+                u_sess->query_info_cxt->is_user_sql = true;
                 exec_simple_query(query_string, QUERY_MESSAGE, &input_message); /* @hdfs Add the second parameter */
 
                 if (MEMORY_TRACKING_QUERY_PEAK)

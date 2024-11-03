@@ -1395,6 +1395,54 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
 }
 
+std::string GenerateInfoSql(knl_query_info_context *query_info){
+    std::ostringstream sql;
+    
+    // 构建 query_info_table 的 INSERT 语句
+    sql << "INSERT INTO query_info_table (query_id, query_string, dop, execution_time, estimate_exec_time, "
+        << "peak_mem, estimate_query_mem, io_time, cpu_time, scan_rows, operator_num, join_num, agg_num, "
+        << "table_names) VALUES (";
+    sql << query_info->query_id << ", "
+        << "'" << query_info->query_string << "', "
+        << query_info->dop << ", "
+        << query_info->execution_time << ", "
+        << query_info->estimate_exec_time << ", "
+        << query_info->peak_mem << ", "
+        << query_info->estimate_query_mem << ", "
+        << query_info->io_time << ", "
+        << query_info->cpu_time << ", "
+        << query_info->scan_rows << ", "
+        << query_info->operator_num << ", "
+        << query_info->join_num << ", "
+        << query_info->agg_num << ", "
+        << "'" << query_info->table_names << "');";
+    bool first = true;
+    // 为每个 knl_plan_info_context 生成 plan_info_table 的 INSERT 语句
+    for (const auto& plan : query_info->Plans) {
+       if (!first) {
+            sql << ", ";
+        }
+        sql << "("
+            << query_info->query_id << ", "
+            << plan.plan_id << ", "
+            << plan.dop << ", "
+            << plan.encoding << ", "
+            << plan.operator_type << ", "
+            << plan.strategy << ", "
+            << plan.execution_time << ", "
+            << plan.estimate_costs << ", "
+            << plan.io_time << ", "
+            << plan.estimate_rows << ", "
+            << plan.actural_rows << ", "
+            << plan.peak_mem << ", "
+            << plan.table_names
+            << ")";
+        first = false;
+    }
+    return sql.str();
+
+}
+
 void ResetQueryInfo(knl_query_info_context *query_info)
 {
     query_info->query_id = -1;
@@ -1410,8 +1458,8 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->join_num = 0;
     query_info->agg_num = 0;
     query_info->is_user_sql = 0;
-    query_info->query_string.clear();
-    query_info->table_names.clear();
+    query_info->query_string="";
+    query_info->table_names="";
     query_info->Plans.clear();
 }
 

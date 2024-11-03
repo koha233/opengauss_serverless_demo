@@ -1486,7 +1486,7 @@ static void knl_u_plan_info_init(knl_plan_info_context *plan_info_cxt)
     plan_info_cxt->actural_rows = 0;
 }
 
-static void knl_u_query_info_init(knl_query_info_context *query_info_cxt)
+static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query_info_cxt)
 {
     query_info_cxt->query_id = -1;
     query_info_cxt->dop = 1;
@@ -1565,7 +1565,6 @@ void knl_session_init(knl_session_context *sess_cxt)
     knl_u_proc_init(&sess_cxt->proc_cxt);
     knl_u_ps_init(&sess_cxt->ps_cxt);
     knl_u_regex_init(&sess_cxt->regex_cxt);
-
     knl_u_relcache_init(&sess_cxt->relcache_cxt);
     knl_u_relmap_init(&sess_cxt->relmap_cxt);
     knl_u_sig_init(&sess_cxt->sig_cxt);
@@ -1604,7 +1603,8 @@ void knl_session_init(knl_session_context *sess_cxt)
     knl_u_clientConnTime_init(&sess_cxt->clientConnTime_cxt);
 
     knl_u_opfusion_reuse_init(&sess_cxt->opfusion_reuse_ctx);
-    knl_u_query_info_init(&sess_cxt->query_info_cxt);
+    sess_cxt->query_info_cxt = std::make_unique<knl_query_info_context>();
+    knl_u_query_info_init(sess_cxt->query_info_cxt);
 
     MemoryContextSeal(sess_cxt->top_mem_cxt);
 }

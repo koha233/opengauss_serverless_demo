@@ -15,6 +15,8 @@
 
 #include "executor/executor.h"
 #include "utils/portal.h"
+#include <sstream>
+#include <memory>
 
 extern uint32 RunGetSlotFromExplain(Portal portal, TupleTableSlot* slot, DestReceiver* dest, int count);
 
@@ -499,8 +501,10 @@ extern void ExplainOnePlan(
 
 extern void ExplainPrintPlan(ExplainState* es, QueryDesc* queryDesc);
 extern void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc* queryDesc);
+extern std::string GenerateInfoSql(knl_query_info_context *query_info);
 extern void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors, const char *relationship, const char *plan_name);
 extern void ResetQueryInfo(knl_query_info_context *query_info);
+extern void InitPlanInfo(knl_plan_info_context &plan_info);
 
 extern void ExplainQueryText(ExplainState* es, QueryDesc* queryDesc);
 

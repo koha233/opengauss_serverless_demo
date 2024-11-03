@@ -544,7 +544,7 @@ PlannedStmt *standard_planner(Query *parse, int cursorOptions, ParamListInfo bou
     ListCell *lp = NULL;
     ListCell *lr = NULL;
     int max_mem = 0;
-    knl_query_info_context *query_info = &u_sess->query_info_cxt;
+    knl_query_info_context *query_info = u_sess->query_info_cxt.get();
     int available_mem = 0;
     int esti_op_mem = 0;
     bool use_query_mem = false;

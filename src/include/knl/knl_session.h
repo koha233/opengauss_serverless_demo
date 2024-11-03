@@ -71,6 +71,7 @@
 #include "og_record_time.h"
 #include <vector>
 #include <string>
+#include <memory>
 
 #define TSRANK_WEIGHTS_LEN    4
 
@@ -3194,7 +3195,7 @@ typedef struct knl_session_context {
 
     /* standby write. */
     knl_u_libsw_context libsw_cxt;
-    knl_query_info_context query_info_cxt;
+    std::unique_ptr<knl_query_info_context> query_info_cxt;
     
 
 } knl_session_context;
