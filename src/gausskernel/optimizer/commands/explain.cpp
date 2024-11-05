@@ -1406,7 +1406,14 @@ bool IsFileEmpty(std::ofstream &file)
 
 void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::string &folder_path)
 {
-    // 写入查询信息
+    char cwd[100]; // 定义一个字符数组来存储路径
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) 
+        std::cout << "当前工作目录: " << cwd << std::endl;
+    // 使用 POSIX access 函数检查目录是否存在
+    if (access(folder_path.c_str(), F_OK) == -1) {
+        // 目录不存在，创建目录
+        mkdir(folder_path.c_str(), 0755) == 0;
+    }
     std::ofstream query_file(folder_path + "/query_info.csv", std::ios::app);  // 以追加模式打开文件
     if (query_file.is_open()) {
         if (IsFileEmpty(query_file)) {
@@ -1716,9 +1723,10 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     //     if (is_pretty)
     //         appendStringInfo(tmpName, " stream_level:%d ", stream_plan->stream_level);
     // }
-
     plan_info.estimate_costs = plan->total_cost;
+    query_info->total_costs = Max(plan->total_cost, query_info->total_costs);
     plan_info.estimate_rows = plan->plan_rows;
+    plan_info.estimate_width = plan->plan_width;
     // if ((IsA(plan, HashJoin) || IsA(plan, VecHashJoin)) && es->verbose) {
     //     char opdist[130] = "\0";
     //     int rc = EOK;

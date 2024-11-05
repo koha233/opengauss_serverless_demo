@@ -3020,7 +3020,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         query_info->execution_time = elapsed_time(&exec_starttime);
         query_info->estimate_work_mem = u_sess->opt_cxt.op_work_mem;
         if (query_info->is_user_sql) {
-            WriteQueryInfoToCsv(query_info, "/home/zhy/opengauss/data_file");
+            WriteQueryInfoToCsv(query_info, "../data_file");
         }
         ResetQueryInfo(query_info);
         CleanHotkeyCandidates(true);
