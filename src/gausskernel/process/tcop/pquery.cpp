@@ -707,7 +707,12 @@ void PortalStart(Portal portal, ParamListInfo params, int eflags, Snapshot snaps
                  * For operator track of active SQL, explain performance is triggered for SELECT SQL,
                  * except cursor case(portal->visible), which can't be run out within one fetch stmt
                  */
-                if (shouldDoInstrument(portal, ps)) {
+                if (u_sess->query_info_cxt->is_user_sql) {
+                    instrument_option |= INSTRUMENT_TIMER;
+                    instrument_option |= INSTRUMENT_BUFFERS;
+                    instrument_option |= INSTRUMENT_CPUS;
+                }
+                else if (shouldDoInstrument(portal, ps)) {
                     instrument_option |= INSTRUMENT_TIMER;
                     instrument_option |= INSTRUMENT_BUFFERS;
                 }
@@ -721,14 +726,14 @@ void PortalStart(Portal portal, ParamListInfo params, int eflags, Snapshot snaps
                  * the destination to DestNone.
                  */
                 queryDesc = CreateQueryDesc(ps, portal->sourceText, GetActiveSnapshot(), InvalidSnapshot, None_Receiver,
-                    params, 0, mot_jit_context);
+                    params, instrument_option, mot_jit_context);
 #else
                 /*
                  * Create QueryDesc in portal's context; for the moment, set
                  * the destination to DestNone.
                  */
                 queryDesc = CreateQueryDesc(
-                    ps, portal->sourceText, GetActiveSnapshot(), InvalidSnapshot, None_Receiver, params, 0);
+                    ps, portal->sourceText, GetActiveSnapshot(), InvalidSnapshot, None_Receiver, params, instrument_option);
 #endif
 
                 /* means on CN of the compute pool. */
@@ -740,11 +745,10 @@ void PortalStart(Portal portal, ParamListInfo params, int eflags, Snapshot snaps
                 if (u_sess->attr.attr_resource.use_workload_manager && (IS_PGXC_COORDINATOR || IS_SINGLE_NODE))
                     u_sess->exec_cxt.need_track_resource = WLMNeedTrackResource(queryDesc);
 
-                if (IS_PGXC_COORDINATOR || IS_SINGLE_NODE) {
-                    if (queryDesc->plannedstmt != NULL && u_sess->exec_cxt.need_track_resource) {
-                        queryDesc->instrument_options |= instrument_option;
-                        queryDesc->plannedstmt->instrument_option = instrument_option;
-                    }
+                if (queryDesc->plannedstmt != NULL && u_sess->query_info_cxt->is_user_sql) {
+                    queryDesc->instrument_options = instrument_option;
+                    queryDesc->plannedstmt->instrument_option = instrument_option;
+                    
                 }
 
                 if (!u_sess->instr_cxt.obs_instr &&

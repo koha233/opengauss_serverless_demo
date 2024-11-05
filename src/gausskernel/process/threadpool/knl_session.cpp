@@ -1496,10 +1496,8 @@ static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query
     query_info_cxt->estimate_query_mem =0;
     query_info_cxt->io_time = 0;
     query_info_cxt->cpu_time = 0;
-    query_info_cxt->scan_rows = 0;
+    query_info_cxt->total_costs = 0;
     query_info_cxt->operator_num = 0;
-    query_info_cxt->join_num = 0;
-    query_info_cxt->agg_num = 0;
     query_info_cxt->is_user_sql=0;
 }
 

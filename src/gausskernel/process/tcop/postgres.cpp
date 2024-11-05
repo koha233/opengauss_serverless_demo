@@ -2840,7 +2840,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         }
         plantree_list = pg_plan_queries(querytree_list, CURSOR_OPT_SPQ_OK, NULL);
         if (query_info->is_user_sql) {
-            //query_info->query_string = query_string;
+            // query_info->query_string = query_string;
             query_info->dop = u_sess->opt_cxt.query_dop;
         }
 
@@ -3020,8 +3020,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         query_info->execution_time = elapsed_time(&exec_starttime);
         query_info->estimate_query_mem = u_sess->opt_cxt.op_work_mem;
         if(query_info->is_user_sql){
-            std::string info_sql = GenerateInfoSql(query_info);
-            WLMRemoteNodeExecuteSql(info_sql.c_str());
+            WriteQueryInfoToCsv(query_info, "/home/zhy/opengauss/data_file");
         }
         ResetQueryInfo(query_info);
         CleanHotkeyCandidates(true);

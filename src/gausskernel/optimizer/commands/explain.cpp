@@ -1395,52 +1395,83 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
 }
 
-std::string GenerateInfoSql(knl_query_info_context *query_info){
+bool IsFileEmpty(std::ofstream &file)
+{
+    return file.tellp() == 0;
+}
+
+void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::string &folder_path)
+{
+    // 写入查询信息
+    std::ofstream query_file(folder_path + "/query_info.csv", std::ios::app);  // 以追加模式打开文件
+    if (query_file.is_open()) {
+        if (IsFileEmpty(query_file)) {
+            query_file << "query_id,query_string,dop,execution_time,estimate_exec_time,"
+                       << "peak_mem,estimate_query_mem,io_time,cpu_time,total_costs,"
+                       << "operator_num,table_names\n";  // 写入表头
+        }
+
+        query_file << query_info->query_id << ", "
+                   << "\"" << query_info->query_string << "\", " << query_info->dop << ", "
+                   << query_info->execution_time << ", " << query_info->estimate_exec_time << ", "
+                   << query_info->peak_mem << ", " << query_info->estimate_query_mem << ", " << query_info->io_time
+                   << ", " << query_info->cpu_time << ", " << query_info->total_costs << ", "
+                   << query_info->operator_num << ", "
+                   << "\"" << query_info->table_names << "\"\n";  // 写入查询信息
+
+        query_file.close();
+    }
+    // 写入计划信息
+    std::ofstream plan_file(folder_path + "/plan_info.csv", std::ios::app);  // 以追加模式打开文件
+    if (plan_file.is_open()) {
+        if (IsFileEmpty(plan_file)) {
+            plan_file << "query_id,plan_id,dop,encoding,operator_type,strategy,"
+                      << "execution_time,estimate_costs,exclusive_cycles_per_row,exclusive_cycles,inclusive_cycles,io_time,estimate_rows,"
+                      << "actural_rows,peak_mem,table_names\n";  // 写入表头
+        }
+
+        for (const auto &plan : query_info->Plans) {
+            plan_file << query_info->query_id << ", " << plan.plan_id << ", " << plan.dop << ", "
+                      << "\"" << plan.encoding << "\", "
+                      << "\"" << plan.operator_type << "\", "
+                      << "\"" << plan.strategy << "\", " << plan.execution_time << ", " << plan.estimate_costs << ", "
+                      << plan.ex_cycles_per_row << ", " << plan.ex_cycles << ", " << plan.incCycles << ", "
+                      << plan.io_time << ", " << plan.estimate_rows << ", " << plan.actural_rows << ", "
+                      << plan.peak_mem << ", "
+                      << "\"" << plan.table_names << "\"\n";  // 写入计划信息
+        }
+
+        plan_file.close();
+    }
+}
+
+std::string GenerateInfoSql(knl_query_info_context *query_info)
+{
     std::ostringstream sql;
-    
+
     // 构建 query_info_table 的 INSERT 语句
     sql << "INSERT INTO query_info_table (query_id, query_string, dop, execution_time, estimate_exec_time, "
-        << "peak_mem, estimate_query_mem, io_time, cpu_time, scan_rows, operator_num, join_num, agg_num, "
+        << "peak_mem, estimate_query_mem, io_time, cpu_time, total_costs, operator_num, "
         << "table_names) VALUES (";
     sql << query_info->query_id << ", "
-        << "'" << query_info->query_string << "', "
-        << query_info->dop << ", "
-        << query_info->execution_time << ", "
-        << query_info->estimate_exec_time << ", "
-        << query_info->peak_mem << ", "
-        << query_info->estimate_query_mem << ", "
-        << query_info->io_time << ", "
-        << query_info->cpu_time << ", "
-        << query_info->scan_rows << ", "
+        << "'" << query_info->query_string << "', " << query_info->dop << ", " << query_info->execution_time << ", "
+        << query_info->estimate_exec_time << ", " << query_info->peak_mem << ", " << query_info->estimate_query_mem
+        << ", " << query_info->io_time << ", " << query_info->cpu_time << ", " << query_info->total_costs << ", "
         << query_info->operator_num << ", "
-        << query_info->join_num << ", "
-        << query_info->agg_num << ", "
         << "'" << query_info->table_names << "');";
-    bool first = true;
+    // bool first = true;
     // 为每个 knl_plan_info_context 生成 plan_info_table 的 INSERT 语句
-    for (const auto& plan : query_info->Plans) {
-       if (!first) {
-            sql << ", ";
-        }
-        sql << "("
-            << query_info->query_id << ", "
-            << plan.plan_id << ", "
-            << plan.dop << ", "
-            << plan.encoding << ", "
-            << plan.operator_type << ", "
-            << plan.strategy << ", "
-            << plan.execution_time << ", "
-            << plan.estimate_costs << ", "
-            << plan.io_time << ", "
-            << plan.estimate_rows << ", "
-            << plan.actural_rows << ", "
-            << plan.peak_mem << ", "
-            << plan.table_names
-            << ")";
-        first = false;
-    }
+    // for (const auto &plan : query_info->Plans) {
+    //     if (!first) {
+    //         sql << ", ";
+    //     }
+    //     sql << "(" << query_info->query_id << ", " << plan.plan_id << ", " << plan.dop << ", " << plan.encoding << ", "
+    //         << plan.operator_type << ", " << plan.strategy << ", " << plan.execution_time << ", " << plan.estimate_costs
+    //         << ", " << plan.io_time << ", " << plan.estimate_rows << ", " << plan.actural_rows << ", " << plan.peak_mem
+    //         << ", " << plan.table_names << ")";
+    //     first = false;
+    // }
     return sql.str();
-
 }
 
 void ResetQueryInfo(knl_query_info_context *query_info)
@@ -1453,13 +1484,11 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->estimate_query_mem = 0;
     query_info->io_time = 0;
     query_info->cpu_time = 0;
-    query_info->scan_rows = 0;
+    query_info->total_costs = 0;
     query_info->operator_num = 0;
-    query_info->join_num = 0;
-    query_info->agg_num = 0;
     query_info->is_user_sql = 0;
-    query_info->query_string="";
-    query_info->table_names="";
+    query_info->query_string = "";
+    query_info->table_names = "";
     query_info->Plans.clear();
 }
 
@@ -1490,6 +1519,9 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.actural_rows = 0;
     plan_info.query_id = query_info->query_id;
     plan_info.io_time = 0;
+    plan_info.ex_cycles_per_row = 0;
+    plan_info.ex_cycles = 0;
+    plan_info.incCycles = 0;
 
     /* Fetch plan node's plain text info */
     GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
@@ -1637,13 +1669,36 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
      */
     if (planstate->instrument) {
         Instrumentation *instrument = planstate->instrument;
-        InstrEndLoop(planstate->instrument);
         const double startup_sec = 1000.0 * instrument->startup;
         const double total_sec = 1000.0 * instrument->total;
         double rows = instrument->ntuples;
         plan_info.actural_rows = rows;
         plan_info.execution_time = total_sec - startup_sec;
         plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
+        InstrEndLoop(planstate->instrument);
+        const BufferUsage *buf_usage = &planstate->instrument->bufusage;
+        bool has_timing =
+            (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) || !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time));
+        if (has_timing) {
+            plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
+            plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
+        }
+        uint64 proRows = 0;
+        double incCycles = 0.0;
+        double exCycles = 0.0;
+        double outerCycles = 0.0;
+        double innerCycles = 0.0;
+        uint64 outterRows = 0;
+        uint64 innerRows = 0;
+        const CPUUsage *cpu_usage = &planstate->instrument->cpuusage;
+        show_child_cpu_cycles_and_rows<false>(planstate, 0, 0, &outerCycles, &innerCycles, &outterRows, &innerRows);
+        incCycles = cpu_usage->m_cycles;
+        exCycles = incCycles - outerCycles - innerCycles;
+        proRows = (long)(planstate->instrument->ntuples);
+        CalculateProcessedRows(planstate, 0, 0, &innerRows, &outterRows, &proRows);
+        plan_info.ex_cycles_per_row = proRows != 0 ? (long)(exCycles / proRows) : 0;
+        plan_info.ex_cycles = (long)exCycles;
+        plan_info.incCycles = (long)incCycles;
     }
 
     // /* target list */
@@ -1655,12 +1710,6 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     //     show_plan_execnodes(planstate, es);
     // }
     /* quals, sort keys, etc */
-    // const BufferUsage *buf_usage = &planstate->instrument->bufusage;
-    // bool has_timing = (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) ||
-    // !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time)); if(has_timing){
-    //     plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
-    //     plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
-    // }
 
     /* if 'cpu' is specified, display the cpu cost */
     // uint64 proRows = 0;
@@ -1686,6 +1735,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     // ExplainPropertyLong("Exclusive Cycles", (long)exCycles, es);
     // ExplainPropertyLong("Inclusive Cycles", (long)incCycles, es);
     plan_info.plan_id = plan->plan_node_id;
+    plan_info.dop = plan->dop;
     query_info->Plans.push_back(plan_info);
 
 runnext:

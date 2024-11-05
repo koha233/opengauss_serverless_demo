@@ -50,10 +50,10 @@
 #define FULL_PERCENT 100
 #define OTHER_USED_PERCENT 60 /* 60 aviable memory for other uses */
 
-#define STATEMENT_MIN_MEM 256             /*MB*/
+#define STATEMENT_MIN_MEM 1             /*MB*/
 #define STATEMETN_MIN_MODIFY_MEM 2 * 1024 /*MB, 2gb*/
-#define MEM_THRESHOLD 32                  /*MB*/
-#define SIMPLE_THRESHOLD (32 * 1024)      /* 32MB */
+#define MEM_THRESHOLD 1                  /*MB*/
+#define SIMPLE_THRESHOLD (1 * 1024)      /* 32MB */
 #define HOLD_NODE_GROUP(group) gs_lock_test_and_set((int*)&group->used, 1)
 #define RESUME_NODE_GROUP(group) gs_lock_test_and_set((int*)&group->used, 0)
 
