@@ -275,6 +275,10 @@ static bool show_scan_distributekey(const Plan *plan)
 static void show_unique_check_info(PlanState *planstate, ExplainState *es);
 static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, StringInfo str, bool is_pretty);
 
+
+static void get_datanode_info(knl_plan_info_context &query_info, PlanState *planstate);
+static void get_buffer_info(knl_plan_info_context &query_info, PlanState *planstate);
+static void get_cpu_info(knl_plan_info_context &query_info, PlanState *planstate);
 /*
  * ExplainQuery -
  *	  execute an EXPLAIN command
@@ -1407,14 +1411,14 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     if (query_file.is_open()) {
         if (IsFileEmpty(query_file)) {
             query_file << "query_id,query_string,dop,execution_time,estimate_exec_time,"
-                       << "peak_mem,estimate_query_mem,io_time,cpu_time,total_costs,"
+                       << "peak_mem,estimate_work_mem,io_time,cpu_time,total_costs,"
                        << "operator_num,table_names\n";  // 写入表头
         }
 
         query_file << query_info->query_id << ", "
                    << "\"" << query_info->query_string << "\", " << query_info->dop << ", "
                    << query_info->execution_time << ", " << query_info->estimate_exec_time << ", "
-                   << query_info->peak_mem << ", " << query_info->estimate_query_mem << ", " << query_info->io_time
+                   << query_info->peak_mem << ", " << query_info->estimate_work_mem << ", " << query_info->io_time
                    << ", " << query_info->cpu_time << ", " << query_info->total_costs << ", "
                    << query_info->operator_num << ", "
                    << "\"" << query_info->table_names << "\"\n";  // 写入查询信息
@@ -1426,8 +1430,9 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     if (plan_file.is_open()) {
         if (IsFileEmpty(plan_file)) {
             plan_file << "query_id,plan_id,dop,encoding,operator_type,strategy,"
-                      << "execution_time,estimate_costs,exclusive_cycles_per_row,exclusive_cycles,inclusive_cycles,io_time,estimate_rows,"
-                      << "actural_rows,peak_mem,table_names\n";  // 写入表头
+                      << "execution_time,estimate_costs,exclusive_cycles_per_row,exclusive_cycles,inclusive_cycles,io_"
+                         "time,estimate_rows,"
+                      << "actural_rows,peak_mem,estimate_width,actural_width,table_names\n";  // 写入表头
         }
 
         for (const auto &plan : query_info->Plans) {
@@ -1437,7 +1442,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "\"" << plan.strategy << "\", " << plan.execution_time << ", " << plan.estimate_costs << ", "
                       << plan.ex_cycles_per_row << ", " << plan.ex_cycles << ", " << plan.incCycles << ", "
                       << plan.io_time << ", " << plan.estimate_rows << ", " << plan.actural_rows << ", "
-                      << plan.peak_mem << ", "
+                      << plan.peak_mem << ", " << plan.estimate_width << ", " << plan.actural_width << ", "
                       << "\"" << plan.table_names << "\"\n";  // 写入计划信息
         }
 
@@ -1451,11 +1456,11 @@ std::string GenerateInfoSql(knl_query_info_context *query_info)
 
     // 构建 query_info_table 的 INSERT 语句
     sql << "INSERT INTO query_info_table (query_id, query_string, dop, execution_time, estimate_exec_time, "
-        << "peak_mem, estimate_query_mem, io_time, cpu_time, total_costs, operator_num, "
+        << "peak_mem, estimate_work_mem, io_time, cpu_time, total_costs, operator_num, "
         << "table_names) VALUES (";
     sql << query_info->query_id << ", "
         << "'" << query_info->query_string << "', " << query_info->dop << ", " << query_info->execution_time << ", "
-        << query_info->estimate_exec_time << ", " << query_info->peak_mem << ", " << query_info->estimate_query_mem
+        << query_info->estimate_exec_time << ", " << query_info->peak_mem << ", " << query_info->estimate_work_mem
         << ", " << query_info->io_time << ", " << query_info->cpu_time << ", " << query_info->total_costs << ", "
         << query_info->operator_num << ", "
         << "'" << query_info->table_names << "');";
@@ -1465,9 +1470,12 @@ std::string GenerateInfoSql(knl_query_info_context *query_info)
     //     if (!first) {
     //         sql << ", ";
     //     }
-    //     sql << "(" << query_info->query_id << ", " << plan.plan_id << ", " << plan.dop << ", " << plan.encoding << ", "
-    //         << plan.operator_type << ", " << plan.strategy << ", " << plan.execution_time << ", " << plan.estimate_costs
-    //         << ", " << plan.io_time << ", " << plan.estimate_rows << ", " << plan.actural_rows << ", " << plan.peak_mem
+    //     sql << "(" << query_info->query_id << ", " << plan.plan_id << ", " << plan.dop << ", " << plan.encoding << ",
+    //     "
+    //         << plan.operator_type << ", " << plan.strategy << ", " << plan.execution_time << ", " <<
+    //         plan.estimate_costs
+    //         << ", " << plan.io_time << ", " << plan.estimate_rows << ", " << plan.actural_rows << ", " <<
+    //         plan.peak_mem
     //         << ", " << plan.table_names << ")";
     //     first = false;
     // }
@@ -1481,7 +1489,7 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->execution_time = 0;
     query_info->estimate_exec_time = 0;
     query_info->peak_mem = 0;
-    query_info->estimate_query_mem = 0;
+    query_info->estimate_work_mem = 0;
     query_info->io_time = 0;
     query_info->cpu_time = 0;
     query_info->total_costs = 0;
@@ -1490,6 +1498,80 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->query_string = "";
     query_info->table_names = "";
     query_info->Plans.clear();
+}
+
+static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *planstate)
+{
+    Instrumentation *instr = NULL;
+    double exec_sec_max = -1;
+    double rows = 0;
+    double exec_sec;
+    int64 peak_memory_min = (int64)(0x6FFFFFFFFFFFFFFF);
+    int64 peak_memory_max = 0;
+    int width_min = (int)(0x6FFFFFFF);
+    int width_max = 0;
+    bool executed = true;
+    uint64 proRows = 0;
+    bool has_timing = false;
+    double incCycles = 0.0;
+    double exCycles = 0.0;
+    double outerCycles = 0.0;
+    double innerCycles = 0.0;
+    double ex_cyc_rows = 0.0;
+    uint64 outterRows = 0;
+    uint64 innerRows = 0;
+    int count = 0;
+    int i = 0;
+    int j = 0;
+    int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
+    if (u_sess->instr_cxt.global_instr->getInstruNodeNum() > 0) {
+        for (i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
+            ThreadInstrumentation *threadinstr =
+                u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
+            if (threadinstr == NULL)
+                continue;
+            for (j = 0; j < dop; j++) {
+                outerCycles = 0.0;
+                innerCycles = 0.0;
+                instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
+                if (instr != NULL && instr->nloops > 0) {
+                    show_child_cpu_cycles_and_rows<true>(planstate, i, j, &outerCycles, &innerCycles, &outterRows,
+                                                         &innerRows);
+                    proRows = (long)(instr->ntuples);
+                    CalculateProcessedRows(planstate, i, j, &innerRows, &outterRows, &proRows);
+                    incCycles = instr->cpuusage.m_cycles;
+                    exCycles = incCycles - outerCycles - innerCycles;
+                    ex_cyc_rows = proRows != 0 ? (long)(exCycles / proRows) : 0;
+                    rows += instr->ntuples;
+                    exec_sec = 1000.0 * instr->total - 1000.0 * instr->startup;
+                    exec_sec_max = rtl::max(exec_sec_max, exec_sec);
+                    peak_memory_min = rtl::min(peak_memory_min, instr->memoryinfo.peakOpMemory);
+                    peak_memory_max = rtl::max(peak_memory_max, instr->memoryinfo.peakOpMemory);
+                    width_min = rtl::min(width_min, instr->width);
+                    width_max = rtl::max(width_max, instr->width);
+                    const BufferUsage *buf_usage = &instr->bufusage;
+                    bool has_timing = (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) ||
+                                       !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time));
+                    if (has_timing) {
+                        plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
+                        plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
+                    }
+                    plan_info.ex_cycles += (long)exCycles;
+                    plan_info.incCycles += (long)incCycles;
+                    count++;
+                }
+            }
+        }
+    }
+    plan_info.ex_cycles_per_row = rows != 0 ? plan_info.ex_cycles / rows : 0;
+    plan_info.actural_rows = rows;
+    plan_info.execution_time = exec_sec_max;
+    plan_info.actural_width = width_max;
+    plan_info.peak_mem = peak_memory_max / 1024;
+}
+
+static void get_buffer_info(knl_plan_info_context &query_info, PlanState *planstate)
+{
 }
 
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
@@ -1522,6 +1604,8 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.ex_cycles_per_row = 0;
     plan_info.ex_cycles = 0;
     plan_info.incCycles = 0;
+    plan_info.estimate_width = 0;
+    plan_info.actural_width = 0;
 
     /* Fetch plan node's plain text info */
     GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
@@ -1669,36 +1753,8 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
      */
     if (planstate->instrument) {
         Instrumentation *instrument = planstate->instrument;
-        const double startup_sec = 1000.0 * instrument->startup;
-        const double total_sec = 1000.0 * instrument->total;
-        double rows = instrument->ntuples;
-        plan_info.actural_rows = rows;
-        plan_info.execution_time = total_sec - startup_sec;
-        plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
         InstrEndLoop(planstate->instrument);
-        const BufferUsage *buf_usage = &planstate->instrument->bufusage;
-        bool has_timing =
-            (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) || !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time));
-        if (has_timing) {
-            plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
-            plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
-        }
-        uint64 proRows = 0;
-        double incCycles = 0.0;
-        double exCycles = 0.0;
-        double outerCycles = 0.0;
-        double innerCycles = 0.0;
-        uint64 outterRows = 0;
-        uint64 innerRows = 0;
-        const CPUUsage *cpu_usage = &planstate->instrument->cpuusage;
-        show_child_cpu_cycles_and_rows<false>(planstate, 0, 0, &outerCycles, &innerCycles, &outterRows, &innerRows);
-        incCycles = cpu_usage->m_cycles;
-        exCycles = incCycles - outerCycles - innerCycles;
-        proRows = (long)(planstate->instrument->ntuples);
-        CalculateProcessedRows(planstate, 0, 0, &innerRows, &outterRows, &proRows);
-        plan_info.ex_cycles_per_row = proRows != 0 ? (long)(exCycles / proRows) : 0;
-        plan_info.ex_cycles = (long)exCycles;
-        plan_info.incCycles = (long)incCycles;
+        get_datanode_info(plan_info, planstate);
     }
 
     // /* target list */

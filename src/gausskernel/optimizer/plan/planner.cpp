@@ -582,19 +582,19 @@ PlannedStmt *standard_planner(Query *parse, int cursorOptions, ParamListInfo bou
         if (max_mem != 0) {
             use_query_mem = true;
             esti_op_mem = (double)available_mem / 2.0;
-            query_info->estimate_query_mem = esti_op_mem;
+            query_info->estimate_work_mem = esti_op_mem;
             u_sess->opt_cxt.op_work_mem = Min(esti_op_mem, OPT_MAX_OP_MEM);
             AssertEreport(u_sess->opt_cxt.op_work_mem > 0, MOD_OPT,
                           "invalid operator work memory when initilizing the work memory used by optimizer");
         } else {
             u_sess->opt_cxt.op_work_mem = u_sess->attr.attr_memory.work_mem;
             esti_op_mem = u_sess->opt_cxt.op_work_mem;
-            query_info->estimate_query_mem = esti_op_mem;
+            query_info->estimate_work_mem = esti_op_mem;
         }
     } else {
         u_sess->opt_cxt.op_work_mem = u_sess->attr.attr_memory.work_mem;
         esti_op_mem = u_sess->opt_cxt.op_work_mem;
-        query_info->estimate_query_mem = esti_op_mem;
+        query_info->estimate_work_mem = esti_op_mem;
     }
 
     /* Cursor options may come from caller or from DECLARE CURSOR stmt */

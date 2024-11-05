@@ -3012,14 +3012,14 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         (void)PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, completionTag);
 
         (*receiver->rDestroy)(receiver);
-        if(portal->queryDesc != NULL && query_info->is_user_sql){
-            query_info->peak_mem = (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle/1024);
+        if (portal->queryDesc != NULL && query_info->is_user_sql) {
+            query_info->peak_mem = (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024);
             CollectQueryInfo(query_info, portal->queryDesc);
         }
         PortalDrop(portal, false);
         query_info->execution_time = elapsed_time(&exec_starttime);
-        query_info->estimate_query_mem = u_sess->opt_cxt.op_work_mem;
-        if(query_info->is_user_sql){
+        query_info->estimate_work_mem = u_sess->opt_cxt.op_work_mem;
+        if (query_info->is_user_sql) {
             WriteQueryInfoToCsv(query_info, "/home/zhy/opengauss/data_file");
         }
         ResetQueryInfo(query_info);

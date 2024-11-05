@@ -748,13 +748,11 @@ void PortalStart(Portal portal, ParamListInfo params, int eflags, Snapshot snaps
                 if (queryDesc->plannedstmt != NULL && u_sess->query_info_cxt->is_user_sql) {
                     queryDesc->instrument_options = instrument_option;
                     queryDesc->plannedstmt->instrument_option = instrument_option;
-                    
                 }
 
                 if (!u_sess->instr_cxt.obs_instr &&
                     ((queryDesc->plannedstmt) != NULL && queryDesc->plannedstmt->has_obsrel)) {
                     AutoContextSwitch cxtGuard(SESS_GET_MEM_CXT_GROUP(MEMORY_CONTEXT_EXECUTOR));
-
                     u_sess->instr_cxt.obs_instr = New(CurrentMemoryContext) OBSInstrumentation();
                 }
 
@@ -1064,6 +1062,17 @@ bool PortalRun(
     MarkPortalActive(portal);
 
     QueryDesc* queryDesc = portal->queryDesc;
+    if (queryDesc != NULL && u_sess->query_info_cxt->is_user_sql) {
+        if (queryDesc->totaltime == NULL) {
+            if(queryDesc->estate == NULL){
+                queryDesc->estate = CreateExecutorState();
+            }
+            MemoryContext oldcxt;
+            oldcxt = MemoryContextSwitchTo(queryDesc->estate->es_query_cxt);
+            portal->queryDesc->totaltime = InstrAlloc(1, INSTRUMENT_ALL);
+            MemoryContextSwitchTo(oldcxt);
+        }
+    }
 
     if (IS_PGXC_DATANODE && queryDesc != NULL && (queryDesc->plannedstmt) != NULL &&
         queryDesc->plannedstmt->has_obsrel) {

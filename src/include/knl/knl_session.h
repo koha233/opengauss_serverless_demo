@@ -3021,6 +3021,8 @@ typedef struct knl_plan_info_context{
     long incCycles;
     double io_time;
     int estimate_rows;
+    int estimate_width;
+    int actural_width;
     int actural_rows;
     int64 peak_mem;
     std::string table_names;
@@ -3033,7 +3035,7 @@ typedef struct knl_query_info_context{
     double execution_time;
     double estimate_exec_time;
     int64 peak_mem;
-    int estimate_query_mem;
+    int estimate_work_mem;
     double io_time;
     double cpu_time;
     double total_costs;

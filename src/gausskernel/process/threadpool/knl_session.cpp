@@ -1493,7 +1493,7 @@ static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query
     query_info_cxt->execution_time = 0;
     query_info_cxt->estimate_exec_time = 0;
     query_info_cxt->peak_mem = 0;
-    query_info_cxt->estimate_query_mem =0;
+    query_info_cxt->estimate_work_mem =0;
     query_info_cxt->io_time = 0;
     query_info_cxt->cpu_time = 0;
     query_info_cxt->total_costs = 0;
