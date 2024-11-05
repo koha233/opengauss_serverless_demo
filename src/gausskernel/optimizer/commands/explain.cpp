@@ -1391,7 +1391,7 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
         char *table_name = get_rel_name(rte->relid);
         if (table_name != NULL) {
             if (!query_info->table_names.empty()) {
-                query_info->table_names += ",";  // 添加逗号和空格作为分隔符
+                query_info->table_names += " ";  // 添加逗号和空格作为分隔符
             }
             query_info->table_names += table_name;
         }
@@ -1423,12 +1423,12 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         }
 
         query_file << query_info->query_id << ", "
-                   << "\"" << query_info->query_string << "\", " << query_info->dop << ", "
+                << query_info->query_string << ", " << query_info->dop << ", "
                    << query_info->execution_time << ", " << query_info->estimate_exec_time << ", "
                    << query_info->peak_mem << ", " << query_info->estimate_work_mem << ", " << query_info->io_time
                    << ", " << query_info->cpu_time << ", " << query_info->total_costs << ", "
                    << query_info->operator_num << ", "
-                   << "\"" << query_info->table_names << "\"\n";  // 写入查询信息
+                   << query_info->table_names << "\n";  // 写入查询信息
 
         query_file.close();
     }
@@ -1444,13 +1444,13 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
 
         for (const auto &plan : query_info->Plans) {
             plan_file << query_info->query_id << ", " << plan.plan_id << ", " << plan.dop << ", "
-                      << "\"" << plan.encoding << "\", "
-                      << "\"" << plan.operator_type << "\", "
-                      << "\"" << plan.strategy << "\", " << plan.execution_time << ", " << plan.estimate_costs << ", "
+                      << plan.encoding << ", "
+                      << plan.operator_type << ", "
+                      << plan.strategy << ", " << plan.execution_time << ", " << plan.estimate_costs << ", "
                       << plan.ex_cycles_per_row << ", " << plan.ex_cycles << ", " << plan.incCycles << ", "
                       << plan.io_time << ", " << plan.estimate_rows << ", " << plan.actural_rows << ", "
                       << plan.peak_mem << ", " << plan.estimate_width << ", " << plan.actural_width << ", "
-                      << "\"" << plan.table_names << "\"\n";  // 写入计划信息
+                      << plan.table_names << "\n";  // 写入计划信息
         }
 
         plan_file.close();
@@ -1650,7 +1650,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             if (relid > 0) {
                 if (GetTargetRel(plan, relid, rtable, table_name, false)) {
                     if (!plan_info.table_names.empty()) {
-                        plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                        plan_info.table_names += " ";  // 添加逗号和空格作为分隔符
                     }
                     plan_info.table_names += table_name;
                 }
@@ -1659,7 +1659,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_IndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
                 if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                    plan_info.table_names += " ";  // 添加逗号和空格作为分隔符
                 }
                 plan_info.table_names += table_name;
             }
@@ -1670,7 +1670,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_IndexOnlyScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
                 if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                    plan_info.table_names += " ";  // 添加逗号和空格作为分隔符
                 }
                 plan_info.table_names += table_name;
             }
@@ -1680,7 +1680,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_CStoreIndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
                 if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                    plan_info.table_names += " ";  // 添加逗号和空格作为分隔符
                 }
                 plan_info.table_names += table_name;
             }
@@ -1694,7 +1694,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             Index rti = (Index)linitial_int((List *)linitial(modifyplan->resultRelations));
             if (GetTargetRel(plan, rti, rtable, table_name, multiTarget)) {
                 if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
+                    plan_info.table_names += " ";  // 添加逗号和空格作为分隔符
                 }
                 plan_info.table_names += table_name;
             }
