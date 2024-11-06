@@ -105,7 +105,7 @@ inline bool COL_IS_ENCODE(int typeId)
 #define BOTH_NULL(flag1, flag2) (IS_NULL((flag1) & (flag2)))
 
 #define SET_NOTNULL(flag) ((flag) = (flag) & (~V_NULL_MASK))
-#define BatchIsNull(pBatch) ((pBatch) == NULL || (pBatch)->m_rows == 0)
+#define BatchIsNull(pBatch) ((pBatch) == NULL || ((pBatch)->m_rows == 0))
 #define VAR_BUF_SIZE 16384
 
 // Retrieve selection vector guarded by selection usage flag

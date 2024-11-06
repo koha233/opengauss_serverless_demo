@@ -24,6 +24,7 @@
 
 #include <fcntl.h>
 #include <limits.h>
+#include <algorithm>
 
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/time.h>
@@ -2840,7 +2841,11 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         }
         plantree_list = pg_plan_queries(querytree_list, CURSOR_OPT_SPQ_OK, NULL);
         if (query_info->is_user_sql) {
-            // query_info->query_string = query_string;
+            query_info->query_string = query_string;
+            // 将回车换行替换为空格
+            std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\n', ' ');
+            std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\r', ' ');
+            std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\t', ' ');
             query_info->dop = u_sess->opt_cxt.query_dop;
         }
 
