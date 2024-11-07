@@ -1380,6 +1380,7 @@ void ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
 {
     AssertEreport(queryDesc->plannedstmt != NULL, MOD_EXECUTOR, "unexpect null value");
+    std::unordered_set<std::string> table_map;
     query_info->operator_num = queryDesc->plannedstmt->num_plannodes;
     query_info->query_id = queryDesc->plannedstmt->queryId;
     const ListCell *lc = NULL;
@@ -1387,11 +1388,14 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
         RangeTblEntry *rte = (RangeTblEntry *)lfirst(lc);
         char *table_name = get_rel_name(rte->relid);
         if (table_name != NULL) {
-            if (!query_info->table_names.empty()) {
+            table_map.insert(table_name);
+        }
+    }
+    for(const auto &table_name : table_map){
+        if (!query_info->table_names.empty()) {
                 query_info->table_names += ",";  // 添加逗号和空格作为分隔符
             }
             query_info->table_names += table_name;
-        }
     }
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
 }
@@ -1434,7 +1438,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             plan_file << "query_id;plan_id;dop;encoding;operator_type;strategy;"
                       << "execution_time;estimate_costs;exclusive_cycles_per_row;exclusive_cycles;inclusive_cycles;io_"
                          "time;estimate_rows;"
-                      << "actural_rows;peak_mem;estimate_width;actural_width,table_names\n";  // 写入表头
+                      << "actural_rows;peak_mem;width;table_names\n";  // 写入表头
         }
 
         for (const auto &plan : query_info->Plans) {
@@ -1443,7 +1447,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.estimate_costs << ";" << plan.ex_cycles_per_row << ";" << plan.ex_cycles << ";"
                       << plan.incCycles << ";" << plan.io_time << ";" << plan.estimate_rows << ";"
                       << plan.actural_rows << ";" << plan.peak_mem << ";" << plan.estimate_width << ";"
-                      << plan.actural_width << ";" << plan.table_names << "\n";  // 写入计划信息
+                      << plan.table_names << "\n";  // 写入计划信息
         }
 
         plan_file.close();
@@ -1736,7 +1740,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     //     if (is_pretty)
     //         appendStringInfo(tmpName, " stream_level:%d ", stream_plan->stream_level);
     // }
-    plan_info.estimate_costs = plan->total_cost;
+    plan_info.estimate_costs = plan->total_cost - plan->startup_cost;
     query_info->total_costs = Max(plan->total_cost, query_info->total_costs);
     plan_info.estimate_rows = plan->plan_rows;
     plan_info.estimate_width = plan->plan_width;

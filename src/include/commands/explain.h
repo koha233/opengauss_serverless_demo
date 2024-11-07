@@ -19,6 +19,7 @@
 #include <memory>
 #include <fstream>
 #include <iostream>
+#include <unordered_set>
 
 extern uint32 RunGetSlotFromExplain(Portal portal, TupleTableSlot* slot, DestReceiver* dest, int count);
 
