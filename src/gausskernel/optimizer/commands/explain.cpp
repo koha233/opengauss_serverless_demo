@@ -1397,6 +1397,7 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
             }
             query_info->table_names += table_name;
     }
+    query_info->estimate_exec_time = t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->estimate_time;
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
 }
 

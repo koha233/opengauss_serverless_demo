@@ -22,5 +22,6 @@ objfiles.txt
 /ereport.txt
 openGauss-third_party_binarylibs_Centos7.6_x86_64.tar.gz
 openGauss-third_party_binarylibs_Centos7.6_x86_64
+logfile
 /build/script/version.cfg
 /cmake_build
