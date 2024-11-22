@@ -3012,10 +3012,12 @@ typedef struct knl_plan_info_context{
     int plan_id;
     int dop;
     std::string encoding;
+    int cstore_buffers;
     std::string operator_type;
     std::string strategy;
     double execution_time;
     double estimate_costs;
+    int instance_mem;
     long ex_cycles_per_row;
     long ex_cycles;
     long incCycles;
@@ -3036,6 +3038,8 @@ typedef struct knl_query_info_context{
     double estimate_exec_time;
     int64 peak_mem;
     int estimate_work_mem;
+    int cstore_buffers;
+    int instance_mem;
     double io_time;
     double cpu_time;
     double total_costs;

@@ -350,7 +350,7 @@ static void InitMemoryConfigureNamesInt()
             GUC_UNIT_KB},
             &g_instance.attr.attr_memory.max_process_memory,
             12 * 1024 * 1024,
-            2 * 1024 * 1024,
+            64 * 1024,
             INT_MAX,
             NULL,
             NULL,

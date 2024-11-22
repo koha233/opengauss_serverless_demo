@@ -46,7 +46,7 @@ THR_LOCAL MemoryContext MemoryTrackMemoryContextInfo = NULL;
 
 #ifdef MEMORY_CONTEXT_CHECKING
 
-void MemoryTrackingBufToFile(StringInfoData* memoryBuf, const char* type);
+void MemoryTrackingBufToFile(StringInfoData *memoryBuf, const char *type);
 
 /*
  * function: MemoryTrackingDetailInfo
@@ -59,7 +59,7 @@ void MemoryTrackingBufToFile(StringInfoData* memoryBuf, const char* type);
  *     line: the line number when palloc() is called
  *
  */
-void MemoryTrackingDetailInfo(MemoryContext context, Size reqSize, Size chunkSize, const char* file, int line)
+void MemoryTrackingDetailInfo(MemoryContext context, Size reqSize, Size chunkSize, const char *file, int line)
 {
     /* don't update the memory tracking when it is invalid */
     if (context->session_id > 0 || !t_thrd.mem_cxt.mem_track_mem_cxt)
@@ -79,6 +79,9 @@ void MemoryTrackingDetailInfo(MemoryContext context, Size reqSize, Size chunkSiz
     if (track && track->isTracking) {
         /* Switch to t_thrd.mem_cxt.mem_track_mem_cxt to allocate memory */
         MemoryContext old = MemoryContextSwitchTo(t_thrd.mem_cxt.mem_track_mem_cxt);
+        if (t_thrd.utils_cxt.detailTrackingBuf->data == NULL) {
+            initStringInfo(&(*t_thrd.utils_cxt.detailTrackingBuf));
+        }
 
         appendStringInfo(&(*t_thrd.utils_cxt.detailTrackingBuf), "%s:%d, %ld, %ld\n", file, line, chunkSize, reqSize);
 
@@ -101,7 +104,7 @@ void MemoryTrackingDetailInfo(MemoryContext context, Size reqSize, Size chunkSiz
  * arguments:
  *    val: the input string
  */
-void MemoryTrackingParseGUC(const char* val)
+void MemoryTrackingParseGUC(const char *val)
 {
     const size_t size = 64;
     char str[size]; /* to record the value */
@@ -134,11 +137,9 @@ void MemoryTrackingInit(void)
 {
     /* Now initiate the memory accounting system. */
     if (!MemoryTrackMemoryContextInfo)
-        MemoryTrackMemoryContextInfo = AllocSetContextCreate(t_thrd.top_mem_cxt,
-            "MemoryTrackMemoryContext",
-            ALLOCSET_DEFAULT_MINSIZE,
-            ALLOCSET_DEFAULT_INITSIZE,
-            ALLOCSET_DEFAULT_MAXSIZE);
+        MemoryTrackMemoryContextInfo =
+            AllocSetContextCreate(t_thrd.top_mem_cxt, "MemoryTrackMemoryContext", ALLOCSET_DEFAULT_MINSIZE,
+                                  ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE);
     else
         t_thrd.mem_cxt.mem_track_mem_cxt = MemoryTrackMemoryContextInfo;
 }
@@ -166,7 +167,7 @@ void MemoryTrackingCreate(MemoryContext context, MemoryContext parent)
     /* allocate a memory tracking element to match this context */
     track = (MemoryTrack)palloc0(sizeof(MemoryTrackData) + strlen(context->name) + 1);
     track->type = T_MemoryTracking;
-    track->name = (char*)track + sizeof(MemoryTrackData);
+    track->name = (char *)track + sizeof(MemoryTrackData);
     rc = strcpy_s(track->name, strlen(context->name) + 1, context->name);
     securec_check_c(rc, "\0", "\0");
     track->sequentCount = t_thrd.utils_cxt.mctx_sequent_count++;
@@ -273,32 +274,22 @@ void MemoryTrackingFreeInfo(MemoryContext context, Size size)
  *    memoryBuf: the string buffer to store the output information
  *    type: the type name to indicate which logging file is created
  */
-void MemoryTrackingBufToFile(StringInfoData* memoryBuf, const char* type)
+void MemoryTrackingBufToFile(StringInfoData *memoryBuf, const char *type)
 {
     int rc = 0;
     char tempdirpath[1024] = {0};
-    FILE* fp = NULL;
+    FILE *fp = NULL;
     bool is_absolute = false;
 
     is_absolute = is_absolute_path(u_sess->attr.attr_common.Log_directory);
     if (is_absolute)
-        rc = snprintf_s(tempdirpath,
-            sizeof(tempdirpath),
-            sizeof(tempdirpath) - 1,
-            "%s/memory_track_%s_%s_%lu.csv",
-            u_sess->attr.attr_common.Log_directory,
-            g_instance.attr.attr_common.PGXCNodeName,
-            type,
-            u_sess->debug_query_id);
+        rc = snprintf_s(tempdirpath, sizeof(tempdirpath), sizeof(tempdirpath) - 1, "%s/memory_track_%s_%s_%lu.csv",
+                        u_sess->attr.attr_common.Log_directory, g_instance.attr.attr_common.PGXCNodeName, type,
+                        u_sess->debug_query_id);
     else
-        rc = snprintf_s(tempdirpath,
-            sizeof(tempdirpath),
-            sizeof(tempdirpath) - 1,
-            "%s/pg_log/memory_track_%s_%s_%lu.csv",
-            g_instance.attr.attr_common.data_directory,
-            g_instance.attr.attr_common.PGXCNodeName,
-            type,
-            u_sess->debug_query_id);
+        rc = snprintf_s(tempdirpath, sizeof(tempdirpath), sizeof(tempdirpath) - 1,
+                        "%s/pg_log/memory_track_%s_%s_%lu.csv", g_instance.attr.attr_common.data_directory,
+                        g_instance.attr.attr_common.PGXCNodeName, type, u_sess->debug_query_id);
 
     securec_check_ss(rc, "\0", "\0");
 
@@ -333,7 +324,7 @@ void MemoryTrackingBufToFile(StringInfoData* memoryBuf, const char* type)
  *    key: the plan nodeid in stream thread
  *    str: the string buffer
  */
-void MemoryTrackingSaveToBuf(MemoryTrack track, int level, int pcnt, int key, StringInfoData* str)
+void MemoryTrackingSaveToBuf(MemoryTrack track, int level, int pcnt, int key, StringInfoData *str)
 {
     int parent_track_cnt = t_thrd.utils_cxt.track_cnt;
     bool flag = true;
@@ -343,17 +334,9 @@ void MemoryTrackingSaveToBuf(MemoryTrack track, int level, int pcnt, int key, St
         flag = false;
 
     if (flag == true)
-        appendStringInfo(str,
-            "%d, %d, %s, %d, %s, %d, %luK, %luK, %d\n",
-            t_thrd.utils_cxt.track_cnt++,
-            track->sequentCount,
-            track->name,
-            pcnt,
-            track->parent ? track->parent->name : NULL,
-            level,
-            track->peakSpace / 1024,
-            track->allBytesPeak / 1024,
-            key);
+        appendStringInfo(str, "%d, %d, %s, %d, %s, %d, %luK, %luK, %d\n", t_thrd.utils_cxt.track_cnt++,
+                         track->sequentCount, track->name, pcnt, track->parent ? track->parent->name : NULL, level,
+                         track->peakSpace / 1024, track->allBytesPeak / 1024, key);
 
     /* generate the file when data size reaches 500MB */
     if (str->len > MAX_STRING_BUF) {
@@ -454,7 +437,8 @@ void MemoryTrackingNodeFree(MemoryTrack track)
  */
 void MemoryTrackingOutputFile(void)
 {
-    if (u_sess->attr.attr_memory.memory_tracking_mode > MEMORY_TRACKING_PEAKMEMORY && t_thrd.utils_cxt.ExecutorMemoryTrack) {
+    if (u_sess->attr.attr_memory.memory_tracking_mode > MEMORY_TRACKING_PEAKMEMORY &&
+        t_thrd.utils_cxt.ExecutorMemoryTrack) {
         /*
          * output the memory context information into log file
          */

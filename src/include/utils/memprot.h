@@ -31,7 +31,7 @@
 #define BITS_IN_MB 20
 #define BITS_IN_KB 10
 
-#define MIN_PROCESS_LIMIT (2 * 1024 * 1024)  // 2GB
+#define MIN_PROCESS_LIMIT (64 * 1024)  // 256M
 #define MEMPROT_INIT_SIZE 200                // 200MB for initialization memory
 
 #define CHUNKS_TO_MB(chunks) ((chunks) << (chunkSizeInBits - BITS_IN_MB))

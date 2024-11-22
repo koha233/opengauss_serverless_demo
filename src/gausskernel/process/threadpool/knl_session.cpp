@@ -1489,6 +1489,8 @@ static void knl_u_plan_info_init(knl_plan_info_context *plan_info_cxt)
 static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query_info_cxt)
 {
     query_info_cxt->query_id = -1;
+    query_info_cxt->cstore_buffers = 0;
+    query_info_cxt->instance_mem = 0;
     query_info_cxt->dop = 1;
     query_info_cxt->execution_time = 0;
     query_info_cxt->estimate_exec_time = 0;

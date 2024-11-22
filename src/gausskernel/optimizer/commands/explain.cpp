@@ -1381,6 +1381,8 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
 {
     AssertEreport(queryDesc->plannedstmt != NULL, MOD_EXECUTOR, "unexpect null value");
     std::unordered_set<std::string> table_map;
+    query_info->cstore_buffers = g_instance.attr.attr_storage.cstore_buffers;
+    query_info->instance_mem = g_instance.attr.attr_memory.max_process_memory;
     query_info->operator_num = queryDesc->plannedstmt->num_plannodes;
     query_info->query_id = queryDesc->plannedstmt->queryId;
     const ListCell *lc = NULL;
@@ -1420,14 +1422,15 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     if (query_file.is_open()) {
         if (IsFileEmpty(query_file)) {
             query_file << "query_id;query_string;dop;execution_time;estimate_exec_time;"
-                       << "peak_mem;estimate_work_mem;io_time;cpu_time;total_costs;"
+                       << "peak_mem;estimate_work_mem;cstore_buffers;instance_mem;"
+                       << "io_time;cpu_time;total_costs;"
                        << "operator_num;table_names\n";  // 写入表头
         }
 
         query_file << query_info->query_id << ";" << query_info->query_string << query_info->dop
                    << ";" << query_info->execution_time << ";" << query_info->estimate_exec_time << ";"
-                   << query_info->peak_mem << ";" << query_info->estimate_work_mem << ";" << query_info->io_time
-                   << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
+                   << query_info->peak_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
+                   << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
                    << query_info->operator_num << ";" << query_info->table_names << "\n";  // 写入查询信息
 
         query_file.close();
@@ -1439,7 +1442,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             plan_file << "query_id;plan_id;dop;encoding;operator_type;strategy;"
                       << "execution_time;estimate_costs;exclusive_cycles_per_row;exclusive_cycles;inclusive_cycles;io_"
                          "time;estimate_rows;"
-                      << "actural_rows;peak_mem;width;table_names\n";  // 写入表头
+                      << "actural_rows;peak_mem;cstore_buffers;instance_mem;"
+                      << "width;table_names\n";  // 写入表头
         }
 
         for (const auto &plan : query_info->Plans) {
@@ -1447,8 +1451,9 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << ";" << plan.operator_type << ";" << plan.strategy << ";" << plan.execution_time << ";"
                       << plan.estimate_costs << ";" << plan.ex_cycles_per_row << ";" << plan.ex_cycles << ";"
                       << plan.incCycles << ";" << plan.io_time << ";" << plan.estimate_rows << ";"
-                      << plan.actural_rows << ";" << plan.peak_mem << ";" << plan.estimate_width << ";"
-                      << plan.table_names << "\n";  // 写入计划信息
+                      << plan.actural_rows << ";" 
+                      << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" 
+                      << plan.estimate_width << ";" << plan.table_names << "\n";  // 写入计划信息
         }
 
         plan_file.close();
@@ -1498,6 +1503,8 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->io_time = 0;
     query_info->cpu_time = 0;
     query_info->total_costs = 0;
+    query_info->cstore_buffers = 0;
+    query_info->instance_mem = 0;
     query_info->operator_num = 0;
     query_info->is_user_sql = 0;
     query_info->query_string = "";
@@ -1629,6 +1636,8 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.incCycles = 0;
     plan_info.estimate_width = 0;
     plan_info.actural_width = 0;
+    plan_info.cstore_buffers = query_info->cstore_buffers;
+    plan_info.instance_mem = query_info->instance_mem;
     std::string table_name;
     if (plan->plan_node_id == 0)
         goto runnext;
