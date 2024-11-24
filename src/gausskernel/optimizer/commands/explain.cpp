@@ -1385,6 +1385,8 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     query_info->instance_mem = g_instance.attr.attr_memory.max_process_memory;
     query_info->operator_num = queryDesc->plannedstmt->num_plannodes;
     query_info->query_id = queryDesc->plannedstmt->queryId;
+    query_info->dynamic_peak_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB));
+    query_info->max_dynamic_memory =  (int)(maxChunksPerProcess << (chunkSizeInBits - BITS_IN_MB));
     const ListCell *lc = NULL;
     foreach (lc, queryDesc->plannedstmt->rtable) {
         RangeTblEntry *rte = (RangeTblEntry *)lfirst(lc);
@@ -1408,6 +1410,38 @@ bool IsFileEmpty(std::ofstream &file)
     return file.tellp() == 0;
 }
 
+// 获取当前的 query_id
+int GetNextQueryId(const std::string &counter_file_path)
+{
+    std::ifstream counter_file(counter_file_path);
+    int query_id = 0;
+
+    // 如果文件存在且不为空，则读取计数器
+    if (counter_file.is_open()) {
+        counter_file >> query_id;
+        counter_file.close();
+    }
+
+    // 如果文件不存在或为空，初始化为 1
+    if (query_id == 0) {
+        query_id = 1;
+    }
+
+    return query_id;
+}
+
+// 更新 query_id 计数器
+void UpdateQueryIdCounter(const std::string &counter_file_path, int new_query_id)
+{
+    std::ofstream counter_file(counter_file_path, std::ios::trunc);  // 以截断模式打开，覆盖旧内容
+    if (counter_file.is_open()) {
+        counter_file << new_query_id;
+        counter_file.close();
+    } else {
+        std::cerr << "无法打开计数文件 " << counter_file_path << std::endl;
+    }
+}
+
 void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::string &folder_path)
 {
     char cwd[100];  // 定义一个字符数组来存储路径
@@ -1418,20 +1452,25 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         // 目录不存在，创建目录
         mkdir(folder_path.c_str(), 0755) == 0;
     }
+    std::string counter_file_path = folder_path + "/query_id_counter";
+    int query_id = GetNextQueryId(counter_file_path);
     std::ofstream query_file(folder_path + "/query_info.csv", std::ios::app);  // 以追加模式打开文件
     if (query_file.is_open()) {
         if (IsFileEmpty(query_file)) {
-            query_file << "query_id;query_string;dop;execution_time;estimate_exec_time;"
+            query_file << "query_id;dop;execution_time;estimate_exec_time;"
                        << "peak_mem;estimate_work_mem;cstore_buffers;instance_mem;"
+                       << "max_dynamic_memory;dynamic_startup_memory;dynamic_peak_memory;"
                        << "io_time;cpu_time;total_costs;"
-                       << "operator_num;table_names\n";  // 写入表头
+                       << "operator_num;table_names;query_string;\n";  // 写入表头
         }
-
-        query_file << query_info->query_id << ";" << query_info->query_string << query_info->dop
+        // 更新 query_id 计数器
+        UpdateQueryIdCounter(counter_file_path, query_id + 1);
+        query_file << query_id << ";" << query_info->dop
                    << ";" << query_info->execution_time << ";" << query_info->estimate_exec_time << ";"
                    << query_info->peak_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
+                   << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->dynamic_peak_memory << ";"
                    << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
-                   << query_info->operator_num << ";" << query_info->table_names << "\n";  // 写入查询信息
+                   << query_info->operator_num << ";" << query_info->table_names << ";" << query_info->query_string << "\n";  // 写入查询信息
 
         query_file.close();
     }
@@ -1445,9 +1484,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "actural_rows;peak_mem;cstore_buffers;instance_mem;"
                       << "width;table_names\n";  // 写入表头
         }
-
         for (const auto &plan : query_info->Plans) {
-            plan_file << query_info->query_id << ";" << plan.plan_id << ";" << plan.dop << ";" << plan.encoding
+            plan_file << query_id << ";" << plan.plan_id << ";" << plan.dop << ";" << plan.encoding
                       << ";" << plan.operator_type << ";" << plan.strategy << ";" << plan.execution_time << ";"
                       << plan.estimate_costs << ";" << plan.ex_cycles_per_row << ";" << plan.ex_cycles << ";"
                       << plan.incCycles << ";" << plan.io_time << ";" << plan.estimate_rows << ";"
@@ -1509,7 +1547,10 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->is_user_sql = 0;
     query_info->query_string = "";
     query_info->table_names = "";
+    query_info->dynamic_startup_memory = 0;
     query_info->Plans.clear();
+    query_info->max_dynamic_memory=0;
+    query_info->dynamic_peak_memory=0;
 }
 
 static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *planstate)
@@ -1518,8 +1559,6 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
     double exec_sec_max = -1;
     double rows = 0;
     double exec_sec;
-    int64 peak_memory_min = (int64)(0x6FFFFFFFFFFFFFFF);
-    int64 peak_memory_max = 0;
     int width_min = (int)(0x6FFFFFFF);
     int width_max = 0;
     bool executed = true;
@@ -1558,8 +1597,7 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                         rows += instr->ntuples;
                         exec_sec = 1000.0 * instr->total - 1000.0 * instr->startup;
                         exec_sec_max = rtl::max(exec_sec_max, exec_sec);
-                        peak_memory_min = rtl::min(peak_memory_min, instr->memoryinfo.peakOpMemory);
-                        peak_memory_max = rtl::max(peak_memory_max, instr->memoryinfo.peakOpMemory);
+                        plan_info.peak_mem += instr->memoryinfo.peakOpMemory / 1024;
                         width_min = rtl::min(width_min, instr->width);
                         width_max = rtl::max(width_max, instr->width);
                         const BufferUsage *buf_usage = &instr->bufusage;
@@ -1580,7 +1618,6 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
         plan_info.actural_rows = rows;
         plan_info.execution_time = exec_sec_max;
         plan_info.actural_width = width_max;
-        plan_info.peak_mem = peak_memory_max / 1024;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
         Instrumentation *instrument = planstate->instrument;
         plan_info.actural_rows =  instrument->ntuples;
@@ -1649,6 +1686,12 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     }
     if (strategy != NULL) {
         plan_info.strategy = strategy;
+    }
+    if (plan_info.encoding == "") {
+        plan_info.encoding = "empty";
+    }
+    if (plan_info.strategy == "") {
+        plan_info.strategy = "empty";
     }
 
     switch (nodeTag(plan)) {

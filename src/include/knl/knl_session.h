@@ -3039,6 +3039,9 @@ typedef struct knl_query_info_context{
     int64 peak_mem;
     int estimate_work_mem;
     int cstore_buffers;
+    int dynamic_peak_memory;
+    int max_dynamic_memory;
+    int dynamic_startup_memory;
     int instance_mem;
     double io_time;
     double cpu_time;
