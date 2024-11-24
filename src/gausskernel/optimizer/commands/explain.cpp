@@ -1385,8 +1385,8 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     query_info->instance_mem = g_instance.attr.attr_memory.max_process_memory;
     query_info->operator_num = queryDesc->plannedstmt->num_plannodes;
     query_info->query_id = queryDesc->plannedstmt->queryId;
-    query_info->dynamic_peak_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB));
-    query_info->max_dynamic_memory =  (int)(maxChunksPerProcess << (chunkSizeInBits - BITS_IN_MB));
+    query_info->dynamic_peak_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
+    query_info->max_dynamic_memory =  (int)(maxChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
     const ListCell *lc = NULL;
     foreach (lc, queryDesc->plannedstmt->rtable) {
         RangeTblEntry *rte = (RangeTblEntry *)lfirst(lc);

@@ -9302,7 +9302,7 @@ int PostgresMain(int argc, char *argv[], const char *dbname, const char *usernam
                 }
 #endif
                 u_sess->query_info_cxt->is_user_sql = true;
-                u_sess->query_info_cxt->dynamic_startup_memory = processMemInChunks << (chunkSizeInBits - BITS_IN_MB);
+                u_sess->query_info_cxt->dynamic_startup_memory = (processMemInChunks << (chunkSizeInBits - BITS_IN_MB)) * 1024;
                 exec_simple_query(query_string, QUERY_MESSAGE, &input_message); /* @hdfs Add the second parameter */
 
                 if (MEMORY_TRACKING_QUERY_PEAK)
