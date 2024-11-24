@@ -3018,8 +3018,8 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
 
         (*receiver->rDestroy)(receiver);
         if (portal->queryDesc != NULL && query_info->is_user_sql) {
-            query_info->peak_mem = (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024);
             CollectQueryInfo(query_info, portal->queryDesc);
+            query_info->peak_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory;
         }
         PortalDrop(portal, false);
         query_info->execution_time = elapsed_time(&exec_starttime);
