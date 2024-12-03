@@ -1459,7 +1459,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         if (IsFileEmpty(query_file)) {
             query_file << "query_id;dop;execution_time;estimate_exec_time;"
                        << "peak_mem;estimate_work_mem;cstore_buffers;instance_mem;"
-                       << "max_dynamic_memory;dynamic_startup_memory;dynamic_peak_memory;"
+                       << "max_dynamic_memory;dynamic_startup_memory;dynamic_peak_memory;other_memory;"
                        << "io_time;cpu_time;total_costs;"
                        << "operator_num;table_names;query_string;\n";  // 写入表头
         }
@@ -1468,7 +1468,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         query_file << query_id << ";" << query_info->dop
                    << ";" << query_info->execution_time << ";" << query_info->estimate_exec_time << ";"
                    << query_info->peak_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
-                   << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->dynamic_peak_memory << ";"
+                   << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->dynamic_peak_memory << ";" << query_info->other_memory << ";"
                    << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
                    << query_info->operator_num << ";" << query_info->table_names << ";" << query_info->query_string << "\n";  // 写入查询信息
 
@@ -1487,7 +1487,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         for (const auto &plan : query_info->Plans) {
             plan_file << query_id << ";" << plan.plan_id << ";" << plan.dop << ";" << plan.encoding
                       << ";" << plan.operator_type << ";" << plan.strategy << ";" << plan.execution_time << ";"
-                      << plan.estimate_costs << ";" << plan.ex_cycles_per_row << ";" << plan.ex_cycles << ";"
+                      << plan.exec_costs << ";" << plan.ex_cycles_per_row << ";" << plan.ex_cycles << ";"
                       << plan.incCycles << ";" << plan.io_time << ";" << plan.estimate_rows << ";"
                       << plan.actural_rows << ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" 
@@ -1551,6 +1551,7 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->Plans.clear();
     query_info->max_dynamic_memory=0;
     query_info->dynamic_peak_memory=0;
+    query_info->other_memory=0;
 }
 
 static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *planstate)
@@ -1575,6 +1576,9 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
     int i = 0;
     int j = 0;
     int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
+    plan_info.exec_costs = planstate->plan->total_cost - planstate->plan->startup_cost;
+    plan_info.estimate_rows = planstate->plan->plan_rows;
+    plan_info.estimate_width = planstate->plan->plan_width;
     if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr) {
         if (u_sess->instr_cxt.global_instr->getInstruNodeNum() > 0) {
             for (i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
@@ -1663,7 +1667,9 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.dop = 1;
     plan_info.execution_time = 0;
     plan_info.peak_mem = 0;
-    plan_info.estimate_costs = 0;
+    plan_info.start_up_costs = 0;
+    plan_info.exec_costs = 0;
+    plan_info.start_up_time = 0;
     plan_info.estimate_rows = 0;
     plan_info.actural_rows = 0;
     plan_info.query_id = query_info->query_id;
@@ -1793,10 +1799,6 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     //     if (is_pretty)
     //         appendStringInfo(tmpName, " stream_level:%d ", stream_plan->stream_level);
     // }
-    plan_info.estimate_costs = plan->total_cost - plan->startup_cost;
-    query_info->total_costs = Max(plan->total_cost, query_info->total_costs);
-    plan_info.estimate_rows = plan->plan_rows;
-    plan_info.estimate_width = plan->plan_width;
     // if ((IsA(plan, HashJoin) || IsA(plan, VecHashJoin)) && es->verbose) {
     //     char opdist[130] = "\0";
     //     int rc = EOK;
@@ -1834,6 +1836,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         InstrEndLoop(planstate->instrument);
         get_datanode_info(plan_info, planstate);
     }
+    query_info->total_costs += plan->total_cost;
 
     // /* target list */
     // if (es->verbose || es->plan)

@@ -296,7 +296,9 @@ void PortalCleanup(Portal portal)
                 }
 #endif
                 t_thrd.utils_cxt.CurrentResourceOwner = portal->resowner;
-                ExecutorFinish(queryDesc);
+                if(!queryDesc->is_finished){
+                    ExecutorFinish(queryDesc);
+                }
                 ExecutorEnd(queryDesc);
 #if !defined(ENABLE_MULTIPLE_NODES) && !defined(USE_SPQ)
                 /*

@@ -1626,6 +1626,38 @@ void ChangeDMLPlanForRONode(PlannedStmt *plan)
     }
 }
 #endif
+
+void compute_other_mem(void)
+{
+    unsigned long total_vm = 0, res = 0, shared = 0, text = 0, lib, data, dt;
+    const char *statm_path = "/proc/self/statm";
+    FILE *f = fopen(statm_path, "r");
+    int pageSize = getpagesize();  // get the size(bytes) for a page
+    if (pageSize <= 0) {
+        ereport(WARNING, (errcode(ERRCODE_WARNING), errmsg("error for call 'getpagesize()', the values for "
+                                                           "process_used_memory and other_used_memory are error!")));
+        pageSize = 1;
+    }
+
+    if (f != NULL) {
+        if (7 == fscanf_s(f, "%lu %lu %lu %lu %lu %lu %lu\n", &total_vm, &res, &shared, &text, &lib, &data, &dt)) {
+            /* page translated to MB */
+            total_vm = BYTES_TO_MB((unsigned long)(total_vm * pageSize));
+            res = BYTES_TO_MB((unsigned long)(res * pageSize));
+            shared = BYTES_TO_MB((unsigned long)(shared * pageSize));
+            text = BYTES_TO_MB((unsigned long)(text * pageSize));
+        }
+        fclose(f);
+    }
+    int mctx_used_size = processMemInChunks << (chunkSizeInBits - BITS_IN_MB);\
+    int cu_size = CUCache->GetCurrentMemSize() >> BITS_IN_MB;
+    knl_query_info_context *query_info = u_sess->query_info_cxt.get();
+    query_info->other_memory = (int)(res - shared - text) - mctx_used_size - cu_size;
+    if(0 > query_info->other_memory){
+        query_info->other_memory = 0;
+    }
+    
+}
 /*
  * exec_simple_plan
  *
@@ -3014,12 +3046,24 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         /*
          * Run the portal to completion, and then drop it (and the receiver).
          */
+        if (portal->queryDesc != NULL){
+            portal->queryDesc->is_finished = false;
+        }
         (void)PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, completionTag);
 
         (*receiver->rDestroy)(receiver);
         if (portal->queryDesc != NULL && query_info->is_user_sql) {
+            /* run cleanup too */
+            ExecutorFinish(portal->queryDesc);
+            if (u_sess->stream_cxt.global_obj) {
+                u_sess->stream_cxt.global_obj->SigStreamThreadClose();
+                StreamNodeGroup::syncQuit(STREAM_COMPLETE);
+            }
             CollectQueryInfo(query_info, portal->queryDesc);
-            query_info->peak_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory;
+            portal->queryDesc->is_finished = true;
+            compute_other_mem();
+            query_info->peak_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory + query_info->other_memory;
+
         }
         PortalDrop(portal, false);
         query_info->execution_time = elapsed_time(&exec_starttime);

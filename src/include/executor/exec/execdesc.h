@@ -58,6 +58,7 @@ typedef struct QueryDesc {
     struct Instrumentation* totaltime; /* total time spent in ExecutorRun */
     bool executed;                     /* if the query already executed */
     bool for_simplify_func;            /* if the query is for simplify function, skip reporting query plan */
+    bool is_finished;
 #ifdef ENABLE_MOT
     JitExec::MotJitContext* mot_jit_context;   /* MOT JIT context required for executing LLVM jitted code */
 #endif

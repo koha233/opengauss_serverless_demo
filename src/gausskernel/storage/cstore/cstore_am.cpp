@@ -2763,7 +2763,7 @@ void CStore::FillVectorLateRead(
     // Case 3: It is a normal CU
     int slotId = CACHE_BLOCK_INVALID_IDX;
     CSTORESCAN_TRACE_START(GET_CU_DATA_LATER_READ);
-    CU* cuPtr = this->GetCUData(cuDescPtr, colIdx, attlen, slotId);
+     CU* cuPtr = this->GetCUData(cuDescPtr, colIdx, attlen, slotId);
     CSTORESCAN_TRACE_END(GET_CU_DATA_LATER_READ);
 
     if (cuPtr->HasNullValue()) {
