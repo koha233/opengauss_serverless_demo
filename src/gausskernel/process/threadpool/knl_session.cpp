@@ -1495,17 +1495,19 @@ static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query
     query_info_cxt->dop = 1;
     query_info_cxt->execution_time = 0;
     query_info_cxt->estimate_exec_time = 0;
-    query_info_cxt->peak_mem = 0;
+    query_info_cxt->query_used_mem = 0;
+    query_info_cxt->operator_mem = 0;
+    query_info_cxt->process_used_mem = 0;
     query_info_cxt->dynamic_startup_memory = 0;
-    query_info_cxt->estimate_work_mem =0;
+    query_info_cxt->estimate_work_mem = 0;
     query_info_cxt->io_time = 0;
     query_info_cxt->cpu_time = 0;
     query_info_cxt->total_costs = 0;
     query_info_cxt->operator_num = 0;
-    query_info_cxt->is_user_sql=0;
-    query_info_cxt->max_dynamic_memory=0;
-    query_info_cxt->dynamic_peak_memory=0;
-    query_info_cxt->other_memory=0;
+    query_info_cxt->is_user_sql = 0;
+    query_info_cxt->max_dynamic_memory = 0;
+    query_info_cxt->dynamic_peak_memory = 0;
+    query_info_cxt->other_memory = 0;
 }
 
 void knl_session_init(knl_session_context *sess_cxt)

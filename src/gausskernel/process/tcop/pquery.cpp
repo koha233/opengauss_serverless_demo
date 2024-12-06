@@ -2024,7 +2024,7 @@ long PortalRunFetch(Portal portal, FetchDirection fdirection, long count, DestRe
 
     /* Disable early free when using cursor which may need rescan */
     bool saved_early_free = u_sess->attr.attr_sql.enable_early_free;
-    u_sess->attr.attr_sql.enable_early_free = false;
+    // u_sess->attr.attr_sql.enable_early_free = false;
 
     /*
      * Set up global portal context pointers.

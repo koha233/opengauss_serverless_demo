@@ -1627,7 +1627,7 @@ void ChangeDMLPlanForRONode(PlannedStmt *plan)
 }
 #endif
 
-void compute_other_mem(void)
+void compute_query_mem(void)
 {
     unsigned long total_vm = 0, res = 0, shared = 0, text = 0, lib, data, dt;
     const char *statm_path = "/proc/self/statm";
@@ -1652,10 +1652,13 @@ void compute_other_mem(void)
     int mctx_used_size = processMemInChunks << (chunkSizeInBits - BITS_IN_MB);\
     int cu_size = CUCache->GetCurrentMemSize() >> BITS_IN_MB;
     knl_query_info_context *query_info = u_sess->query_info_cxt.get();
-    query_info->other_memory = (int)(res - shared - text) - mctx_used_size - cu_size;
+    query_info->other_memory = ((int)(res - shared - text) - mctx_used_size - cu_size) * 1024;
     if(0 > query_info->other_memory){
         query_info->other_memory = 0;
+       
     }
+    query_info->process_used_mem = res * 1024 - query_info->dynamic_startup_memory;
+    query_info->query_used_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory;
     
 }
 /*
@@ -3061,8 +3064,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
             }
             CollectQueryInfo(query_info, portal->queryDesc);
             portal->queryDesc->is_finished = true;
-            compute_other_mem();
-            query_info->peak_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory + query_info->other_memory;
+            compute_query_mem();
 
         }
         PortalDrop(portal, false);

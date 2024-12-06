@@ -1458,7 +1458,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     if (query_file.is_open()) {
         if (IsFileEmpty(query_file)) {
             query_file << "query_id;dop;execution_time;estimate_exec_time;"
-                       << "peak_mem;estimate_work_mem;cstore_buffers;instance_mem;"
+                       << "query_used_mem;operator_mem;"
+                       << "process_used_mem;estimate_work_mem;cstore_buffers;instance_mem;"
                        << "max_dynamic_memory;dynamic_startup_memory;dynamic_peak_memory;other_memory;"
                        << "io_time;cpu_time;total_costs;"
                        << "operator_num;table_names;query_string;\n";  // 写入表头
@@ -1467,7 +1468,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         UpdateQueryIdCounter(counter_file_path, query_id + 1);
         query_file << query_id << ";" << query_info->dop
                    << ";" << query_info->execution_time << ";" << query_info->estimate_exec_time << ";"
-                   << query_info->peak_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
+                   << query_info->query_used_mem << ";"  << query_info->operator_mem << ";" 
+                   << query_info->process_used_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
                    << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->dynamic_peak_memory << ";" << query_info->other_memory << ";"
                    << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
                    << query_info->operator_num << ";" << query_info->table_names << ";" << query_info->query_string << "\n";  // 写入查询信息
@@ -1503,15 +1505,15 @@ std::string GenerateInfoSql(knl_query_info_context *query_info)
     std::ostringstream sql;
 
     // 构建 query_info_table 的 INSERT 语句
-    sql << "INSERT INTO query_info_table (query_id, query_string, dop, execution_time, estimate_exec_time, "
-        << "peak_mem, estimate_work_mem, io_time, cpu_time, total_costs, operator_num, "
-        << "table_names) VALUES (";
-    sql << query_info->query_id << ";"
-        << query_info->query_string << ";" << query_info->dop << ";" << query_info->execution_time << ";"
-        << query_info->estimate_exec_time << ";" << query_info->peak_mem << ";" << query_info->estimate_work_mem
-        << ";" << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
-        << query_info->operator_num << ";"
-        << "'" << query_info->table_names << "');";
+    // sql << "INSERT INTO query_info_table (query_id, query_string, dop, execution_time, estimate_exec_time, "
+    //     << "peak_mem, estimate_work_mem, io_time, cpu_time, total_costs, operator_num, "
+    //     << "table_names) VALUES (";
+    // sql << query_info->query_id << ";"
+    //     << query_info->query_string << ";" << query_info->dop << ";" << query_info->execution_time << ";"
+    //     << query_info->estimate_exec_time << ";" << query_info->qu << ";" << query_info->estimate_work_mem
+    //     << ";" << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
+    //     << query_info->operator_num << ";"
+    //     << "'" << query_info->table_names << "');";
     // bool first = true;
     // 为每个 knl_plan_info_context 生成 plan_info_table 的 INSERT 语句
     // for (const auto &plan : query_info->Plans) {
@@ -1536,10 +1538,12 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->dop = 1;
     query_info->execution_time = 0;
     query_info->estimate_exec_time = 0;
-    query_info->peak_mem = 0;
+    query_info->query_used_mem = 0;
+    query_info->process_used_mem = 0;
     query_info->estimate_work_mem = 0;
     query_info->io_time = 0;
     query_info->cpu_time = 0;
+    query_info->operator_mem = 0;
     query_info->total_costs = 0;
     query_info->cstore_buffers = 0;
     query_info->instance_mem = 0;
@@ -1599,7 +1603,7 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                         exCycles = incCycles - outerCycles - innerCycles;
                         ex_cyc_rows = proRows != 0 ? (long)(exCycles / proRows) : 0;
                         rows += instr->ntuples;
-                        exec_sec = 1000.0 * instr->total - 1000.0 * instr->startup;
+                        exec_sec = 1000.0 * instr->total;
                         exec_sec_max = rtl::max(exec_sec_max, exec_sec);
                         plan_info.peak_mem += instr->memoryinfo.peakOpMemory / 1024;
                         width_min = rtl::min(width_min, instr->width);
@@ -1835,6 +1839,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         Instrumentation *instrument = planstate->instrument;
         InstrEndLoop(planstate->instrument);
         get_datanode_info(plan_info, planstate);
+        query_info->operator_mem += plan_info.peak_mem;
     }
     query_info->total_costs += plan->total_cost;
 

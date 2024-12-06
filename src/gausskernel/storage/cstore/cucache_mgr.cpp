@@ -531,10 +531,7 @@ CUUncompressedRetCode DataCacheMgr::StartUncompressCU(
  */
 int64 DataCacheMgr::GetCurrentMemSize()
 {
-    if (!IS_SINGLE_NODE)
         return m_cache_mgr->GetCurrentMemSize();
-    else
-        return 0;
 }
 
 /*
