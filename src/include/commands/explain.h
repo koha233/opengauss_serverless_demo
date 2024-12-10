@@ -506,6 +506,7 @@ extern void ExplainPrintPlan(ExplainState* es, QueryDesc* queryDesc);
 extern void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc* queryDesc);
 extern std::string GenerateInfoSql(knl_query_info_context *query_info);
 extern void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::string &file_path);
+extern void UpdateExecutionTimes(knl_query_info_context* query_info);
 extern bool IsFileEmpty(std::ofstream &file);
 extern void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors, const char *relationship, const char *plan_name);
 extern void ResetQueryInfo(knl_query_info_context *query_info);

@@ -2965,6 +2965,8 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
          * already is one, silently drop it.
          */
         portal = CreatePortal("", true, true);
+        if(query_info->is_user_sql)
+        query_info->optimizer_used_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
         /* Don't display the portal in pg_cursors */
         portal->visible = false;
 

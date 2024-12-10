@@ -1485,6 +1485,8 @@ static void knl_u_plan_info_init(knl_plan_info_context *plan_info_cxt)
     plan_info_cxt->exec_costs = 0;
     plan_info_cxt->estimate_rows =0;
     plan_info_cxt->actural_rows = 0;
+    plan_info_cxt->l_input_rows = 0;
+    plan_info_cxt->r_input_rows = 0;
 }
 
 static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query_info_cxt)
@@ -1507,6 +1509,7 @@ static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query
     query_info_cxt->is_user_sql = 0;
     query_info_cxt->max_dynamic_memory = 0;
     query_info_cxt->dynamic_peak_memory = 0;
+    query_info_cxt->optimizer_used_memory = 0;
     query_info_cxt->other_memory = 0;
 }
 

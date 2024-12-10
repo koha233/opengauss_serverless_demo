@@ -254,6 +254,8 @@ typedef struct Plan {
      * planner's estimate of result size of this plan step
      */
     double plan_rows; /* number of global rows plan is expected to emit */
+    double l_input_rows; 
+    double r_input_rows; 
     double multiple;
     int plan_width; /* average row width in bytes */
     int dop;        /* degree of parallelism of current plan */

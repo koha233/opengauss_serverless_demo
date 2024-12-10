@@ -72,6 +72,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 #define TSRANK_WEIGHTS_LEN    4
 
@@ -3027,9 +3028,12 @@ typedef struct knl_plan_info_context{
     int estimate_rows;
     int estimate_width;
     int actural_width;
+    int l_input_rows;
+    int r_input_rows;
     int actural_rows;
     int64 peak_mem;
     std::string table_names;
+    std::vector<int> child_plan_ids;
 } knl_plan_info_context;
 
 typedef struct knl_query_info_context{
@@ -3044,6 +3048,7 @@ typedef struct knl_query_info_context{
     int estimate_work_mem;
     int cstore_buffers;
     int dynamic_peak_memory;
+    int optimizer_used_memory;
     int max_dynamic_memory;
     int dynamic_startup_memory;
     int other_memory;
@@ -3054,7 +3059,7 @@ typedef struct knl_query_info_context{
     int operator_num;
     bool is_user_sql;
     std::string table_names;
-    std::vector<knl_plan_info_context> Plans;
+    std::unordered_map<int,knl_plan_info_context> Plans;
 } knl_query_info_context;
 
 typedef struct knl_session_context {

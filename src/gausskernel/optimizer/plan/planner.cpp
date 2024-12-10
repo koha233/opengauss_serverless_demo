@@ -191,6 +191,7 @@ static PathTarget *make_group_input_target(PlannerInfo *root, PathTarget *final_
 static void process_planner_targets(PlannerInfo *root, PlannerTargets *targets, List *tlist, List *activeWindows);
 static void adjust_paths_for_srfs(PlannerInfo *root, RelOptInfo *rel, List *targets, List *targets_contain_srfs);
 static Plan *adjust_plan_for_srfs(PlannerInfo *root, Plan *plan, List *targets, List *targets_contain_srfs);
+static void set_plan_input_rows(Plan *plan);
 
 #ifdef PGXC
 static void separate_rowmarks(PlannerInfo *root);
@@ -15004,6 +15005,25 @@ static Plan *adjust_plan_for_srfs(PlannerInfo *root, Plan *plan, List *targets, 
     }
     return newplan;
 }
+
+static void set_plan_input_rows(Plan* plan) {
+    if (plan == nullptr) {
+        return; // 空节点直接返回
+    }
+
+    // 递归设置左子树
+    if (plan->lefttree != nullptr) {
+        set_plan_input_rows(plan->lefttree);
+        plan->l_input_rows = plan->lefttree->plan_rows; // 父节点的左输入行数为左子树的输出行数
+    }
+
+    // 递归设置右子树
+    if (plan->righttree != nullptr) {
+        set_plan_input_rows(plan->righttree);
+        plan->r_input_rows = plan->righttree->plan_rows; // 父节点的右输入行数为右子树的输出行数
+    }
+}
+
 
 #ifdef USE_SPQ
 static Node *get_spq_multiple_from_expr(PlannerInfo *root, Node *expr, double rows, double *skew_multiple,

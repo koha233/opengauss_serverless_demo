@@ -444,7 +444,8 @@ static Plan* create_plan_recurse(PlannerInfo* root, Path* best_path)
      * If the plan is on CN, we should not parallelize.
      */
     plan->dop = is_execute_on_datanodes(plan) ? SET_DOP(best_path->dop) : 1;
-
+    plan->l_input_rows = 0;
+    plan->r_input_rows = 0;
     return plan;
 }
 

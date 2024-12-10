@@ -2659,7 +2659,7 @@ void StreamInstrumentation::SetPeakNodeMemory(int plan_node_id, int64 memory_siz
 
     Instrumentation* instr = &thread_instr->m_instrArray[m_instr_array_map[plan_node_id - 1]].instr.instruPlanData;
 
-    instr->memoryinfo.peakNodeMemory = memory_size;
+     instr->memoryinfo.peakNodeMemory = memory_size;
 }
 // Pre-defined CPU monitor groups
 //
