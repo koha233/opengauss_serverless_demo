@@ -1442,29 +1442,46 @@ void UpdateQueryIdCounter(const std::string &counter_file_path, int new_query_id
         std::cerr << "无法打开计数文件 " << counter_file_path << std::endl;
     }
 }
-void UpdateExecutionTimes(knl_query_info_context* query_info) {
-    for (auto& [plan_id, plan] : query_info->Plans) {
-        // 检查是否有子节点
-        if (plan.child_plan_ids.empty()) {
-            continue; // 没有子节点，跳过
-        }
-
-        // 计算子节点的最大执行时间
-        double max_child_execution_time = 0.0;
-        for (int child_id : plan.child_plan_ids) {
-            // 确保子节点在 Plans 中存在
-            if (query_info->Plans.find(child_id) != query_info->Plans.end()) {
-                max_child_execution_time = std::max(
-                    max_child_execution_time,
-                    query_info->Plans[child_id].execution_time
-                );
-            }
-        }
-
-        // 更新当前节点的 execution_time
-        plan.execution_time -= max_child_execution_time;
+void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_id) {
+    // 确保当前 plan_id 存在于 Plans 中
+    if (query_info.Plans.find(plan_id) == query_info.Plans.end()) {
+        return;
     }
+
+    // 获取当前节点
+    knl_plan_info_context& plan = query_info.Plans[plan_id];
+
+    // 如果没有子节点，直接返回
+    if (plan.child_plan_ids.empty()) {
+        return;
+    }
+
+    // 遍历所有子节点，递归更新它们的 execution_time
+    double max_child_execution_time = 0.0;
+    for (int child_id : plan.child_plan_ids) {
+        // 递归更新子节点
+        UpdateExecutionTimesRecursive(query_info, child_id);
+
+        // 更新最大子节点执行时间
+        if (query_info.Plans.find(child_id) != query_info.Plans.end()) {
+            max_child_execution_time = std::max(
+                max_child_execution_time,
+                query_info.Plans[child_id].execution_time
+            );
+        }
+    }
+
+    // 更新当前节点的 execution_time
+    plan.execution_time -= max_child_execution_time;
 }
+
+void UpdateExecutionTimes(knl_query_info_context* query_info) {
+    int root_plan_id = 1;
+
+    // 从根节点开始递归更新
+    UpdateExecutionTimesRecursive(query_info, root_plan_id);
+}
+
 
 void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::string &folder_path)
 {
