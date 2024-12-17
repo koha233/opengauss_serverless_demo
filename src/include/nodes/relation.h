@@ -1137,6 +1137,7 @@ typedef struct Path {
     /* estimated size/costs for path (see costsize.c for more info) */
     double rows; /* estimated number of global result tuples */
     double multiple;
+    double input_rows; /* 输入元组 */
     Cost startup_cost; /* cost expended before fetching any tuples */
     Cost total_cost;   /* total cost (assuming all tuples fetched) */
     Cost stream_cost;  /* cost of actions invoked by stream but can't be parallelled in this path */

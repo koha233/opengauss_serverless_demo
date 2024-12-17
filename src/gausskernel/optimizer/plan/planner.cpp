@@ -2018,7 +2018,7 @@ Plan *subquery_planner(PlannerGlobal *glob, Query *parse, PlannerInfo *parent_ro
         fix_vars_plannode(root, plan);
         root->parse->is_from_inlist2join_rewrite = true;
     }
-
+    set_plan_input_rows(plan);
     return plan;
 }
 
@@ -4463,6 +4463,7 @@ static Plan *internal_grouping_planner(PlannerInfo *root, double tuple_fraction)
 
             set_plan_rows(result_plan,
                           get_global_rows(dNumDistinctRows[0], 1.0, ng_get_dest_num_data_nodes(result_plan)));
+            set_input_rows(result_plan, result_plan->plan_rows);
 
             /* The Unique node won't change sort ordering */
 #ifdef STREAMPLAN
@@ -8071,6 +8072,7 @@ static Plan *build_lower_winagg_plan(PlannerInfo *root, Plan *plan, WindowClause
                                                          list_make1(winFunCondition));
 
                         set_plan_rows(bottomPlan, clamp_row_est(plan->plan_rows * selec));
+                        set_input_rows(bottomPlan,plan->plan_rows);
                     }
                 }
             }
@@ -8172,6 +8174,7 @@ static Plan *mark_windowagg_stream(PlannerInfo *root, Plan *plan, List *tlist, W
                 Path windowagg_path; /* dummy for result of cost_windowagg */
 
                 set_plan_rows(resultPlan, lefttree->plan_rows, lefttree->multiple);
+                set_input_rows(resultPlan, lefttree->plan_rows);
                 cost_windowagg(&windowagg_path, root, wflists->windowFuncs[wa_plan->winref], wa_plan->partNumCols,
                                wa_plan->ordNumCols, lefttree->startup_cost, lefttree->total_cost,
                                PLAN_LOCAL_ROWS(lefttree));
@@ -11259,6 +11262,7 @@ static Plan *generate_hashagg_plan(PlannerInfo *root, Plan *plan, List *final_li
         securec_check(rc, "\0", "\0");
         plan = mark_top_agg(root, final_list, agg_plan, plan, agg_orientation);
         plan->plan_rows = final_groups;
+        plan->l_input_rows = plan->lefttree->plan_rows;
         ((Agg *)plan)->numGroups = (long)Min(plan->plan_rows, (double)LONG_MAX);
         /* add new agg node cost */
         Distribution *distribution = ng_get_dest_distribution(plan);
@@ -15014,7 +15018,7 @@ static void set_plan_input_rows(Plan* plan) {
     // 递归设置左子树
     if (plan->lefttree != nullptr) {
         set_plan_input_rows(plan->lefttree);
-        plan->l_input_rows = plan->lefttree->plan_rows; // 父节点的左输入行数为左子树的输出行数
+        plan->l_input_rows = plan->lefttree->plan_rows;
     }
 
     // 递归设置右子树

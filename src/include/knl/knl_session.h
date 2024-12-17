@@ -3016,7 +3016,7 @@ typedef struct knl_plan_info_context{
     int cstore_buffers;
     std::string operator_type;
     std::string strategy;
-    double start_up_time;
+    double total_time;
     double execution_time;
     double start_up_costs;
     double exec_costs;
@@ -3048,7 +3048,7 @@ typedef struct knl_query_info_context{
     int estimate_work_mem;
     int cstore_buffers;
     int dynamic_peak_memory;
-    int optimizer_used_memory;
+    int init_used_memory;
     int max_dynamic_memory;
     int dynamic_startup_memory;
     int other_memory;

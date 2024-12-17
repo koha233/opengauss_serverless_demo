@@ -152,6 +152,8 @@ void init_plan_cost(Plan* plan)
     plan->multiple = 1.0;
     plan->plan_rows = 0.0;
     plan->plan_width = 0;
+    plan->l_input_rows = 0;
+    plan->r_input_rows = 0;
     plan->innerdistinct = 1.0;
     plan->outerdistinct = 1.0;
     plan->pred_rows = -1.0;
@@ -788,7 +790,6 @@ void cost_cstorescan(Path* path, PlannerInfo* root, RelOptInfo* baserel)
 
     /* Should only be applied to base relations */
     Assert(baserel->relid > 0 && baserel->rtekind == RTE_RELATION);
-
     set_rel_path_rows(path, baserel, NULL);
     set_parallel_path_rows(path);
 
@@ -2157,6 +2158,7 @@ void cost_recursive_union(Plan* runion, Plan* nrterm, Plan* rterm)
     runion->startup_cost = startup_cost;
     runion->total_cost = total_cost;
     set_plan_rows(runion, total_global_rows, nrterm->multiple);
+    set_input_rows(runion, nrterm->l_input_rows + rterm->l_input_rows);
     runion->plan_width = Max(nrterm->plan_width, rterm->plan_width);
 }
 

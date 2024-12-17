@@ -982,6 +982,7 @@ static Plan* make_union_unique(
         plan = (Plan*)make_sort_from_sortclauses(root, groupList, plan);
         plan = (Plan*)make_unique(plan, groupList);
         set_plan_rows(plan, dNumGroups[1], plan->lefttree->multiple);
+        set_input_rows(plan, plan->lefttree->plan_rows);
         /* We know the sort order of the result */
         *sortClauses = groupList;
     }

@@ -244,6 +244,11 @@ FORCE_INLINE bool CanTransferInJoin(JoinType jointype)
               jointype == JOIN_LEFT_ANTI_FULL || jointype == JOIN_RIGHT_ANTI_FULL));
 }
 
+void set_input_rows(Plan* plan, double inputRows)
+{
+    plan->l_input_rows = inputRows;
+}
+
 /*
  * set_plan_rows
  *     set plan node's rows and multiple from a global rows
@@ -444,8 +449,6 @@ static Plan* create_plan_recurse(PlannerInfo* root, Path* best_path)
      * If the plan is on CN, we should not parallelize.
      */
     plan->dop = is_execute_on_datanodes(plan) ? SET_DOP(best_path->dop) : 1;
-    plan->l_input_rows = 0;
-    plan->r_input_rows = 0;
     return plan;
 }
 
@@ -1956,6 +1959,12 @@ static Plan* create_unique_plan(PlannerInfo* root, UniquePath* best_path)
 
     /* Adjust output size estimate (other fields should be OK already) */
     set_plan_rows(plan, best_path->path.rows, best_path->path.multiple);
+    if (plan->lefttree) {
+        set_input_rows(plan, plan->lefttree->l_input_rows);
+    }
+    else{
+        set_input_rows(plan, best_path->path.rows);
+    }
 
 #ifdef STREAMPLAN
     if (plan->lefttree) {
@@ -2902,6 +2911,7 @@ static Plan* create_bitmap_subplan(PlannerInfo* root, Path* bitmapqual, List** q
         set_plan_rows(
             plan, clamp_row_est(apath->bitmapselectivity * apath->path.parent->tuples), apath->path.parent->multiple);
         plan->plan_width = 0; /* meaningless */
+        set_input_rows(plan, apath->path.parent->tuples);
         *qual = subquals;
         *indexqual = subindexquals;
         *indexECs = subindexECs;
@@ -2967,6 +2977,7 @@ static Plan* create_bitmap_subplan(PlannerInfo* root, Path* bitmapqual, List** q
             ((BitmapOr*)plan)->is_ustore = opath->is_ustore;
             plan->startup_cost = opath->path.startup_cost;
             plan->total_cost = opath->path.total_cost;
+            set_input_rows(plan, opath->path.parent->tuples);
             set_plan_rows(plan,
                 clamp_row_est(opath->bitmapselectivity * opath->path.parent->tuples),
                 opath->path.parent->multiple);
@@ -3048,6 +3059,7 @@ static Plan* create_bitmap_subplan(PlannerInfo* root, Path* bitmapqual, List** q
 
         plan->startup_cost = 0.0;
         plan->total_cost = ipath->indextotalcost;
+        set_input_rows(plan, ipath->path.parent->tuples);
         set_plan_rows(
             plan, clamp_row_est(ipath->indexselectivity * ipath->path.parent->tuples), ipath->path.parent->multiple);
         plan->plan_width = 0; /* meaningless */
@@ -5640,6 +5652,7 @@ static void copy_generic_path_info(Plan *dest, Path *src)
         dest->startup_cost = src->startup_cost;
         dest->total_cost = src->total_cost;
         dest->plan_rows = src->rows;
+        dest->l_input_rows = src->parent->tuples;
         dest->plan_width = src->pathtarget->width;
     } else {
         dest->startup_cost = 0;
@@ -5659,6 +5672,7 @@ static void copy_path_costsize(Plan* dest, Path* src)
         dest->startup_cost = src->startup_cost;
         dest->total_cost = src->total_cost;
         set_plan_rows(dest, src->rows, src->multiple);
+        set_input_rows(dest, src->parent->tuples);
         dest->plan_width = src->parent->reltarget->width;
         dest->innerdistinct = src->innerdistinct;
         dest->outerdistinct = src->outerdistinct;
@@ -5678,6 +5692,7 @@ void copy_plan_costsize(Plan* dest, Plan* src)
         dest->startup_cost = src->startup_cost;
         dest->total_cost = src->total_cost;
         set_plan_rows_from_plan(dest, PLAN_LOCAL_ROWS(src), src->multiple);
+        set_input_rows(dest, src->l_input_rows);
         dest->plan_width = src->plan_width;
     } else {
         /* init the cost field directly */
@@ -7769,6 +7784,7 @@ Plan* materialize_finished_plan(Plan* subplan, bool materialize_above_stream, bo
     matplan->startup_cost = matpath.startup_cost;
     matplan->total_cost = matpath.total_cost;
     set_plan_rows(matplan, subplan->plan_rows, subplan->multiple);
+    set_input_rows(matplan, subplan->l_input_rows);
     (void)cost_rescan_material(PLAN_LOCAL_ROWS(matplan),
         get_plan_actual_total_width(matplan, vectorized, OP_SORT),
         &((Material*)matplan)->mem_info,
@@ -7959,6 +7975,7 @@ Agg* make_agg(PlannerInfo* root, List* tlist, List* qual, AggStrategy aggstrateg
     } else {
         set_plan_rows(plan, plan_rows, 1.0);
     }
+    set_input_rows(plan, lefttree->plan_rows);
 
     node->groupingSets = groupingSets;
 
@@ -8089,6 +8106,7 @@ Group* make_group(PlannerInfo* root, List* tlist, List* qual, int numGroupCols, 
 
     /* One output tuple per estimated result group */
     set_plan_rows(plan, get_global_rows(numGroups, 1.0, ng_get_dest_num_data_nodes(lefttree)), 1.0);
+    set_input_rows(plan, lefttree->plan_rows);
 
     /*
      * We also need to account for the cost of evaluation of the qual (ie, the
@@ -8212,6 +8230,7 @@ SetOp* make_setop(SetOpCmd cmd, SetOpStrategy strategy, Plan* lefttree, List* di
     copy_mem_info(&node->mem_info, memInfo);
     set_plan_rows(
         plan, get_global_rows(outputRows, lefttree->multiple, ng_get_dest_num_data_nodes(plan)), lefttree->multiple);
+    set_input_rows(plan, lefttree->plan_rows);
 
     /*
      * Charge one cpu_operator_cost per comparison per input tuple. We assume

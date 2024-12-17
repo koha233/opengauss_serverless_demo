@@ -1383,7 +1383,6 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     std::unordered_set<std::string> table_map;
     query_info->cstore_buffers = g_instance.attr.attr_storage.cstore_buffers;
     query_info->instance_mem = g_instance.attr.attr_memory.max_process_memory;
-    query_info->operator_num = queryDesc->plannedstmt->num_plannodes;
     query_info->query_id = queryDesc->plannedstmt->queryId;
     query_info->dynamic_peak_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
     query_info->max_dynamic_memory =  (int)(maxChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
@@ -1402,6 +1401,21 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
             query_info->table_names += table_name;
     }
     query_info->estimate_exec_time = t_thrd.shemem_ptr_cxt.mySessionMemoryEntry->estimate_time;
+    if(query_info->dop == 1){
+        query_info->query_used_mem = (int64)(t_thrd.utils_cxt.peakedBytesInQueryLifeCycle / 1024);
+    } else {
+        // SessionLevelMemory *entry = NULL;
+        // int entryIndex;
+        // errno_t rc;
+
+        // for (entryIndex = 0; entryIndex < SessionMemoryArraySize; entryIndex++) {
+        //     entry = &(t_thrd.shemem_ptr_cxt.sessionMemoryArray[entryIndex]);
+        //     if (false == entry->isValid || 0 == (entry->peakChunksQuery - entry->initMemInChunks))
+        //         continue;
+        //     query_info->query_used_mem += (entry->peakChunksQuery - entry->initMemInChunks) * 1024;
+        // }
+        query_info->query_used_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory;
+    }
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
     UpdateExecutionTimes(query_info);
 }
@@ -1444,15 +1458,16 @@ void UpdateQueryIdCounter(const std::string &counter_file_path, int new_query_id
 }
 void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_id) {
     // 确保当前 plan_id 存在于 Plans 中
-    if (query_info.Plans.find(plan_id) == query_info.Plans.end()) {
+    if (query_info->Plans.find(plan_id) == query_info->Plans.end()) {
         return;
     }
 
     // 获取当前节点
-    knl_plan_info_context& plan = query_info.Plans[plan_id];
+    knl_plan_info_context& plan = query_info->Plans[plan_id];
 
     // 如果没有子节点，直接返回
     if (plan.child_plan_ids.empty()) {
+        plan.execution_time =  plan.total_time;
         return;
     }
 
@@ -1463,20 +1478,20 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
         UpdateExecutionTimesRecursive(query_info, child_id);
 
         // 更新最大子节点执行时间
-        if (query_info.Plans.find(child_id) != query_info.Plans.end()) {
+        if (query_info->Plans.find(child_id) != query_info->Plans.end()) {
             max_child_execution_time = std::max(
                 max_child_execution_time,
-                query_info.Plans[child_id].execution_time
+                query_info->Plans[child_id].total_time
             );
         }
     }
 
     // 更新当前节点的 execution_time
-    plan.execution_time -= max_child_execution_time;
+    plan.execution_time =  plan.total_time-max_child_execution_time;
 }
 
 void UpdateExecutionTimes(knl_query_info_context* query_info) {
-    int root_plan_id = 1;
+    int root_plan_id = 0;
 
     // 从根节点开始递归更新
     UpdateExecutionTimesRecursive(query_info, root_plan_id);
@@ -1501,7 +1516,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             query_file << "query_id;dop;execution_time;estimate_exec_time;"
                        << "query_used_mem;operator_mem;"
                        << "process_used_mem;estimate_work_mem;cstore_buffers;instance_mem;"
-                       << "max_dynamic_memory;dynamic_startup_memory;optimizer_used_memory;dynamic_peak_memory;other_memory;"
+                       << "max_dynamic_memory;dynamic_startup_memory;init_used_memory;dynamic_peak_memory;other_memory;"
                        << "io_time;cpu_time;total_costs;"
                        << "operator_num;table_names;query_string\n";  // 写入表头
         }
@@ -1511,7 +1526,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                    << ";" << query_info->execution_time << ";" << query_info->estimate_exec_time << ";"
                    << query_info->query_used_mem << ";"  << query_info->operator_mem << ";" 
                    << query_info->process_used_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
-                   << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->optimizer_used_memory << ";" << query_info->dynamic_peak_memory << ";" << query_info->other_memory << ";"
+                   << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->init_used_memory << ";" << query_info->dynamic_peak_memory << ";" << query_info->other_memory << ";"
                    << query_info->io_time << ";" << query_info->cpu_time << ";" << query_info->total_costs << ";"
                    << query_info->operator_num << ";" << query_info->table_names << ";" << query_info->query_string << "\n";  // 写入查询信息
 
@@ -1596,7 +1611,7 @@ void ResetQueryInfo(knl_query_info_context *query_info)
     query_info->max_dynamic_memory=0;
     query_info->dynamic_peak_memory=0;
     query_info->other_memory=0;
-    query_info->optimizer_used_memory = 0;
+    query_info->init_used_memory = 0;
 }
 
 static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *planstate)
@@ -1667,12 +1682,12 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
         }
         plan_info.ex_cycles_per_row = rows != 0 ? plan_info.ex_cycles / rows : 0;
         plan_info.actural_rows = rows;
-        plan_info.execution_time = exec_sec_max;
+        plan_info.total_time = exec_sec_max;
         plan_info.actural_width = width_max;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
         Instrumentation *instrument = planstate->instrument;
         plan_info.actural_rows =  instrument->ntuples;
-        plan_info.execution_time = 1000.0 * instrument->total;
+        plan_info.total_time = 1000.0 * instrument->total;
         plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
         const BufferUsage *buf_usage = &planstate->instrument->bufusage;
         has_timing =
@@ -1716,7 +1731,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.peak_mem = 0;
     plan_info.start_up_costs = 0;
     plan_info.exec_costs = 0;
-    plan_info.start_up_time = 0;
+    plan_info.total_time = 0;
     plan_info.estimate_rows = 0;
     plan_info.actural_rows = 0;
     plan_info.query_id = query_info->query_id;
@@ -1731,8 +1746,6 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.cstore_buffers = query_info->cstore_buffers;
     plan_info.instance_mem = query_info->instance_mem;
     std::string table_name;
-    if (plan->plan_node_id == 0)
-        goto runnext;
 
     /* Fetch plan node's plain text info */
     GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
@@ -1921,9 +1934,10 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     // ExplainPropertyLong("Exclusive Cycles Per Row", proRows != 0 ? (long)(exCycles / proRows) : 0, es);
     // ExplainPropertyLong("Exclusive Cycles", (long)exCycles, es);
     // ExplainPropertyLong("Inclusive Cycles", (long)incCycles, es);
-    plan_info.plan_id = plan->plan_node_id;
+    plan_info.plan_id = query_info->operator_num;
     plan_info.dop = plan->dop;
-    query_info->Plans.insert({plan_info.plan_id, plan_info});
+    query_info->Plans.insert({query_info->operator_num, plan_info});
+    query_info->operator_num++;
 
 runnext:
 
@@ -1950,8 +1964,8 @@ runnext:
             if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
                 continue;
             }
-            if(query_info->Plans.find(plan->plan_node_id) != query_info->Plans.end())
-            query_info->Plans[plan->plan_node_id].child_plan_ids.push_back(sp->plan_id);
+            if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+            query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
         }
     }
@@ -1961,23 +1975,23 @@ runnext:
         CteScanState *css = (CteScanState *)planstate;
 
         if (css->cteplanstate) {
-            if(query_info->Plans.find(plan->plan_node_id) != query_info->Plans.end())
-            query_info->Plans[plan->plan_node_id].child_plan_ids.push_back(css->cteplanstate->plan->plan_node_id);
+            if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+            query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, css->cteplanstate, ancestors, "CTE Sub", NULL);
         }
     }
 
     /* lefttree */
     if (outerPlanState(planstate)) {
-        if(query_info->Plans.find(plan->plan_node_id) != query_info->Plans.end())
-        query_info->Plans[plan->plan_node_id].child_plan_ids.push_back(plan->lefttree->plan_node_id);
+        if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+        query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
         CollectPlanInfo(query_info, rtable, outerPlanState(planstate), ancestors, "Outer", NULL);
     }
 
     /* righttree */
     if (innerPlanState(planstate)) {
-        if(query_info->Plans.find(plan->plan_node_id) != query_info->Plans.end())
-        query_info->Plans[plan->plan_node_id].child_plan_ids.push_back(plan->righttree->plan_node_id);
+        if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+        query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
         CollectPlanInfo(query_info, rtable, innerPlanState(planstate), ancestors, "Inner", NULL);
     }
 
@@ -2015,8 +2029,8 @@ runnext:
         } break;
         case T_SubqueryScan:
         case T_VecSubqueryScan: {
-            if (query_info->Plans.find(plan->plan_node_id) != query_info->Plans.end())
-                query_info->Plans[plan->plan_node_id].child_plan_ids.push_back(((SubqueryScanState *)planstate)->subplan->plan->plan_node_id);
+            if (query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+                query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, ((SubqueryScanState *)planstate)->subplan, ancestors, "Subquery", NULL);
         } break;
         case T_ExtensiblePlan: {
@@ -2026,15 +2040,15 @@ runnext:
 
             foreach (cell, epplanstate->extensible_ps)
             {
-                if(query_info->Plans.find(plan->plan_node_id) != query_info->Plans.end())
-                    query_info->Plans[plan->plan_node_id].child_plan_ids.push_back(((PlanState *)lfirst(cell))->plan->plan_node_id);
+                if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+                    query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
                 CollectPlanInfo(query_info, rtable, (PlanState *)lfirst(cell), ancestors, label, NULL);
             }
         } break;
 #ifdef USE_SPQ
         case T_Sequence:
             CollectMemberNodes(query_info, rtable, ((Sequence *)plan)->subplans, ((SequenceState *)planstate)->subplans,
-                               ancestors, plan->plan_node_id);
+                               ancestors, plan_info.plan_id);
             break;
 #endif
         default:
@@ -2052,6 +2066,8 @@ runnext:
             if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
                 continue;
             }
+            if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
+                query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
         }
     }
@@ -9155,7 +9171,7 @@ static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable,
     bool exist = (query_info->Plans.find(parent_id) != query_info->Plans.end());
     for (int j = 0; j < nplans; j++) {
         if(exist)
-        query_info->Plans[parent_id].child_plan_ids.push_back(planstates[j]->plan->plan_node_id);
+        query_info->Plans[parent_id].child_plan_ids.push_back(query_info->operator_num);
         CollectPlanInfo(query_info, rtable, planstates[j], ancestors, "Member", NULL);
     }
 }

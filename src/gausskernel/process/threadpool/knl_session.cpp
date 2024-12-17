@@ -1509,7 +1509,7 @@ static void knl_u_query_info_init(std::unique_ptr<knl_query_info_context>& query
     query_info_cxt->is_user_sql = 0;
     query_info_cxt->max_dynamic_memory = 0;
     query_info_cxt->dynamic_peak_memory = 0;
-    query_info_cxt->optimizer_used_memory = 0;
+    query_info_cxt->init_used_memory = 0;
     query_info_cxt->other_memory = 0;
 }
 

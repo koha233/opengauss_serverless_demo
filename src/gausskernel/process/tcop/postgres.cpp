@@ -1658,8 +1658,6 @@ void compute_query_mem(void)
        
     }
     query_info->process_used_mem = res * 1024 - query_info->dynamic_startup_memory;
-    query_info->query_used_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory;
-    
 }
 /*
  * exec_simple_plan
@@ -2874,6 +2872,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         if (strcmp(commandTag, "SELECT") != 0 && strcmp(commandTag, "SELECT INTO") != 0) {
             query_info->is_user_sql = false;
         }
+
         plantree_list = pg_plan_queries(querytree_list, CURSOR_OPT_SPQ_OK, NULL);
         if (query_info->is_user_sql) {
             query_info->query_string = query_string;
@@ -2965,8 +2964,6 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
          * already is one, silently drop it.
          */
         portal = CreatePortal("", true, true);
-        if(query_info->is_user_sql)
-        query_info->optimizer_used_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
         /* Don't display the portal in pg_cursors */
         portal->visible = false;
 
@@ -3054,6 +3051,8 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         if (portal->queryDesc != NULL){
             portal->queryDesc->is_finished = false;
         }
+        if(query_info->is_user_sql)
+        query_info->init_used_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
         (void)PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, completionTag);
 
         (*receiver->rDestroy)(receiver);
@@ -9350,7 +9349,7 @@ int PostgresMain(int argc, char *argv[], const char *dbname, const char *usernam
                 }
 #endif
                 u_sess->query_info_cxt->is_user_sql = true;
-                u_sess->query_info_cxt->dynamic_startup_memory = (processMemInChunks << (chunkSizeInBits - BITS_IN_MB)) * 1024;
+                u_sess->query_info_cxt->dynamic_startup_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
                 exec_simple_query(query_string, QUERY_MESSAGE, &input_message); /* @hdfs Add the second parameter */
 
                 if (MEMORY_TRACKING_QUERY_PEAK)
