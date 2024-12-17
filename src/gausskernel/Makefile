@@ -271,8 +271,8 @@ LDFLAGS += -L$(BOOST_LIB_PATH) -L$(LIBTINFO_LIB_PATH) \
     -L$(LIBCGROUP_LIB_PATH) \
     -L$(LIBOPENSSL_LIB_PATH)
 # append protobuf for compression: protobuf
-LDFLAGS += -L$(PROTOBUF_LIB_PATH)
-CXXFLAGS+= -I$(PROTOBUF_INCLUDE_PATH)
+# LDFLAGS += -L$(PROTOBUF_LIB_PATH)
+# CXXFLAGS+= -I$(PROTOBUF_INCLUDE_PATH)
 ifeq ($(enable_lite_mode), no)
 LDFLAGS += -L$(LIBOBS_LIB_PATH) \
     -L$(LIBLLVM_LIB_PATH) -L$(LIBXML_LIB_PATH) \
@@ -586,7 +586,7 @@ ifeq ($(enable_multiple_nodes), yes)
 	$(MAKE) -C $(top_builddir)/contrib/gc_fdw install
 
 endif
-	cp -r $(PROTOBUF_LIB_PATH)/* '$(DESTDIR)$(libdir)/'
+#	cp -r $(PROTOBUF_LIB_PATH)/* '$(DESTDIR)$(libdir)/'
 ifeq ($(enable_mot), yes)
 	$(MAKE) -C $(top_builddir)/src/gausskernel/storage/mot/fdw_adapter install
 endif

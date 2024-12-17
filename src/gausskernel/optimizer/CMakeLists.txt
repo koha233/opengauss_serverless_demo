@@ -17,14 +17,12 @@ set(CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/statistics
     ${CMAKE_CURRENT_SOURCE_DIR}/aioptimizer
     ${CMAKE_CURRENT_SOURCE_DIR}/gplanmgr
-    ${CMAKE_CURRENT_SOURCE_DIR}/planproto
 )
 
 add_subdirectory(commands)
 add_subdirectory(geqo)
 add_subdirectory(path)
 add_subdirectory(plan)
-add_subdirectory(planproto)
 add_subdirectory(prep)
 add_subdirectory(rewrite)
 add_subdirectory(util)

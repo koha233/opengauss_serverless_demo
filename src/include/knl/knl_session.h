@@ -3012,6 +3012,7 @@ typedef struct knl_plan_info_context{
     int query_id;
     int plan_id;
     int dop;
+    NodeTag type;
     std::string encoding;
     int cstore_buffers;
     std::string operator_type;

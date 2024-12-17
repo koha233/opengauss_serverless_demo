@@ -1477,17 +1477,21 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
         // 递归更新子节点
         UpdateExecutionTimesRecursive(query_info, child_id);
 
-        // 更新最大子节点执行时间
-        if (query_info->Plans.find(child_id) != query_info->Plans.end()) {
-            max_child_execution_time = std::max(
-                max_child_execution_time,
-                query_info->Plans[child_id].total_time
-            );
+        if (plan.type != NodeTag::T_VecStream) {
+            // 更新最大子节点执行时间
+            if (query_info->Plans.find(child_id) != query_info->Plans.end()) {
+                max_child_execution_time = std::max(max_child_execution_time, query_info->Plans[child_id].total_time);
+            }
         }
     }
 
     // 更新当前节点的 execution_time
-    plan.execution_time =  plan.total_time-max_child_execution_time;
+    if (plan.type != NodeTag::T_VecStream) {
+        plan.execution_time =  plan.total_time-max_child_execution_time;
+    }
+    else{
+        plan.execution_time =  plan.total_time;
+    }
 }
 
 void UpdateExecutionTimes(knl_query_info_context* query_info) {
@@ -1761,6 +1765,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     if (plan_info.strategy == "") {
         plan_info.strategy = "empty";
     }
+    plan_info.type = nodeTag(plan);
 
     switch (nodeTag(plan)) {
         case T_SeqScan:
