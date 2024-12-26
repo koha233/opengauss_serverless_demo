@@ -1769,8 +1769,8 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
                         instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
                         if (instr != NULL && instr->nloops > 0) {
                             if (max_time < instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time) {
-                                plan_info.agg_build_time = instr->sorthashinfo.hashbuild_time;
-                                plan_info.agg_hash_time = instr->sorthashinfo.hashagg_time;
+                                plan_info.agg_build_time = instr->sorthashinfo.hashbuild_time * 1000;
+                                plan_info.agg_hash_time = instr->sorthashinfo.hashagg_time * 1000;
                                 max_time = instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time;
                             }
                         }
@@ -1778,8 +1778,8 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
                 }
             } else if (planstate->instrument && planstate->instrument->nloops > 0) {
                 Instrumentation *instrument = planstate->instrument;
-                plan_info.agg_build_time = instrument->sorthashinfo.hashbuild_time;
-                plan_info.agg_hash_time = instrument->sorthashinfo.hashagg_time;
+                plan_info.agg_build_time = instrument->sorthashinfo.hashbuild_time * 1000;
+                plan_info.agg_hash_time = instrument->sorthashinfo.hashagg_time * 1000;
             }
         } break;
         default:

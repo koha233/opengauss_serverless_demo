@@ -3069,7 +3069,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
 
         }
         PortalDrop(portal, false);
-        query_info->execution_time = elapsed_time(&exec_starttime);
+        query_info->execution_time = elapsed_time(&exec_starttime) * 1000;
         query_info->estimate_work_mem = u_sess->opt_cxt.op_work_mem;
         if (query_info->is_user_sql) {
             WriteQueryInfoToCsv(query_info, "../data_file");

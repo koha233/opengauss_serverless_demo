@@ -3035,8 +3035,8 @@ typedef struct knl_plan_info_context{
     int64 peak_mem;
     int agg_width;
     int agg_col;
-    int agg_build_time;
-    int agg_hash_time;
+    double agg_build_time;
+    double agg_hash_time;
     std::string table_names;
     std::vector<int> child_plan_ids;
 } knl_plan_info_context;
