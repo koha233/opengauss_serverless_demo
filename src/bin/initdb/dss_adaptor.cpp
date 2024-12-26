@@ -1,1 +1,1 @@
-/home/zhy/opengauss/openGauss-server/./src/gausskernel/storage/dss/dss_adaptor.cpp
+/home/zhy/opengauss/openGauss-Scale/./src/gausskernel/storage/dss/dss_adaptor.cpp

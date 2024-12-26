@@ -1377,6 +1377,33 @@ void ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
         ExplainNode<false>(queryDesc->planstate, NIL, NULL, NULL, es);
 }
 
+void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* query_info){
+    plan_info.plan_id = -1;
+    plan_info.dop = 1;
+    plan_info.execution_time = 0;
+    plan_info.peak_mem = 0;
+    plan_info.start_up_costs = 0;
+    plan_info.exec_costs = 0;
+    plan_info.total_time = 0;
+    plan_info.estimate_rows = 0;
+    plan_info.actural_rows = 0;
+    plan_info.io_time = 0;
+    plan_info.ex_cycles_per_row = 0;
+    plan_info.ex_cycles = 0;
+    plan_info.incCycles = 0;
+    plan_info.estimate_width = 0;
+    plan_info.actural_width = 0;
+    plan_info.l_input_rows = 0;
+    plan_info.r_input_rows = 0;
+    plan_info.cstore_buffers = query_info->cstore_buffers;
+    plan_info.instance_mem = query_info->instance_mem;
+    plan_info.query_id = query_info->query_id;
+    plan_info.agg_width = 0;
+    plan_info.agg_col = 0;
+    plan_info.agg_build_time = 0;
+    plan_info.agg_hash_time = 0;
+}
+
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
 {
     AssertEreport(queryDesc->plannedstmt != NULL, MOD_EXECUTOR, "unexpect null value");
@@ -1544,7 +1571,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "execution_time;estimate_costs;estimate_rows;"
                       << "actural_rows;l_input_rows;r_input_rows;"
                       << "peak_mem;cstore_buffers;instance_mem;"
-                      << "width;table_names\n";  // 写入表头
+                      << "width;table_names;" // 写入表头
+                      << "agg_col;agg_width;build_time;hash_time\n";  // 写入表头
         }
         for (const auto& [plan_id, plan] : query_info->Plans) {
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" << plan.operator_type << ";" 
@@ -1552,7 +1580,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.estimate_rows << ";" << plan.actural_rows << ";" 
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" 
-                      << plan.estimate_width << ";" << plan.table_names << "\n";  // 写入计划信息
+                      << plan.estimate_width << ";" << plan.table_names << ";"
+                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << "\n";  // 写入计划信息
         }
 
         plan_file.close();
@@ -1712,6 +1741,47 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
     }
 }
 
+void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
+{
+    Agg *plan = (Agg *)aggstate->ss.ps.plan;
+    switch (((Agg *)plan)->aggstrategy) {
+        case AGG_HASHED: {
+            PlanState *planstate = (PlanState *)aggstate;
+            if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr) {
+                Instrumentation *instr = NULL;
+                double max_time = 0;
+                int datanode_size = 0;
+                int i = 0;
+                int j = 0;
+                int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
+
+                if (u_sess->instr_cxt.global_instr)
+                    datanode_size = u_sess->instr_cxt.global_instr->getInstruNodeNum();
+                for (i = 0; i < datanode_size; i++) {
+                    ThreadInstrumentation *threadinstr =
+                        u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
+                    if (threadinstr == NULL)
+                        continue;
+                    for (j = 0; j < dop; j++) {
+                        instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
+                        if (instr != NULL && instr->nloops > 0) {
+                            if (max_time < instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time) {
+                                plan_info.agg_build_time = instr->sorthashinfo.hashbuild_time;
+                                plan_info.agg_hash_time = instr->sorthashinfo.hashagg_time;
+                                max_time = instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time;
+                            }
+                        }
+                    }
+                }
+            }
+        } break;
+        case AGG_SORTED:
+            break;
+        default:
+            break;
+    }
+}
+
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
                      const char *relationship, const char *plan_name)
 {
@@ -1729,26 +1799,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     char *pt_operation = NULL;
     char *pt_options = NULL;
     knl_plan_info_context plan_info;
-    plan_info.plan_id = -1;
-    plan_info.dop = 1;
-    plan_info.execution_time = 0;
-    plan_info.peak_mem = 0;
-    plan_info.start_up_costs = 0;
-    plan_info.exec_costs = 0;
-    plan_info.total_time = 0;
-    plan_info.estimate_rows = 0;
-    plan_info.actural_rows = 0;
-    plan_info.query_id = query_info->query_id;
-    plan_info.io_time = 0;
-    plan_info.ex_cycles_per_row = 0;
-    plan_info.ex_cycles = 0;
-    plan_info.incCycles = 0;
-    plan_info.estimate_width = 0;
-    plan_info.actural_width = 0;
-    plan_info.l_input_rows = 0;
-    plan_info.r_input_rows = 0;
-    plan_info.cstore_buffers = query_info->cstore_buffers;
-    plan_info.instance_mem = query_info->instance_mem;
+    InitPlanInfo(plan_info, query_info);
     std::string table_name;
 
     /* Fetch plan node's plain text info */
@@ -1854,6 +1905,12 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_Append:
         case T_VecAppend:
         case T_RecursiveUnion:
+            break;
+        case T_VecAgg:
+        case T_Agg: {
+            get_agg_plan_info(plan_info, (AggState *)planstate);
+            break;
+        }
         default:
             break;
     }

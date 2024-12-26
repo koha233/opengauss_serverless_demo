@@ -1,1 +1,1 @@
-/home/zhy/opengauss/openGauss-server/./src/gausskernel/storage/access/transam/xlogreader.cpp
+/home/zhy/opengauss/openGauss-Scale/./src/gausskernel/storage/access/transam/xlogreader.cpp

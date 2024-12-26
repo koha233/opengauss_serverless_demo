@@ -7925,8 +7925,10 @@ Agg* make_agg(PlannerInfo* root, List* tlist, List* qual, AggStrategy aggstrateg
     copy_plan_costsize(plan, lefttree); /* only care about copying size */
 
     /* For agg and above node, we should add agg function width to total width */
-    if (aggcosts != NULL && add_width)
+    if (aggcosts != NULL && add_width){
         plan->plan_width += aggcosts->aggWidth;
+        node->agg_width = aggcosts->aggWidth;
+    }
 
     agg_path.pathtype = T_Group; /* use pathtype in ng_get_dest_num_data_nodes */
     ng_copy_distribution(&agg_path.distribution, ng_get_dest_distribution((Plan*)node));

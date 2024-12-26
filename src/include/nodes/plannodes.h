@@ -1286,6 +1286,7 @@ typedef struct Agg {
     AggSplit aggsplittype;		/* agg-splitting mode, see nodes.h */
 #endif
     int numCols;           /* number of grouping columns */
+    int agg_width;          /* 桶宽度 */
     AttrNumber* grpColIdx; /* their indexes in the target list */
     Oid* grpOperators;     /* equality operators to compare with */
     long numGroups;        /* estimated number of groups in input */

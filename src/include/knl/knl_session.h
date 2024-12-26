@@ -3033,6 +3033,10 @@ typedef struct knl_plan_info_context{
     int r_input_rows;
     int actural_rows;
     int64 peak_mem;
+    int agg_width;
+    int agg_col;
+    int agg_build_time;
+    int agg_hash_time;
     std::string table_names;
     std::vector<int> child_plan_ids;
 } knl_plan_info_context;
