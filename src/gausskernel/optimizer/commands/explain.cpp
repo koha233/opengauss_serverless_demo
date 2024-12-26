@@ -1744,6 +1744,8 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
 void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
 {
     Agg *plan = (Agg *)aggstate->ss.ps.plan;
+    plan_info.agg_width = plan->agg_width;
+    plan_info.agg_col = plan->numCols;
     switch (((Agg *)plan)->aggstrategy) {
         case AGG_HASHED: {
             PlanState *planstate = (PlanState *)aggstate;
