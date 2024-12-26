@@ -1747,6 +1747,7 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     plan_info.agg_width = plan->agg_width;
     plan_info.agg_col = plan->numCols;
     switch (((Agg *)plan)->aggstrategy) {
+        case AGG_SORTED:
         case AGG_HASHED: {
             PlanState *planstate = (PlanState *)aggstate;
             if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr) {
@@ -1775,10 +1776,12 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
                         }
                     }
                 }
+            } else if (planstate->instrument && planstate->instrument->nloops > 0) {
+                Instrumentation *instrument = planstate->instrument;
+                plan_info.agg_build_time = instrument->sorthashinfo.hashbuild_time;
+                plan_info.agg_hash_time = instrument->sorthashinfo.hashagg_time;
             }
         } break;
-        case AGG_SORTED:
-            break;
         default:
             break;
     }

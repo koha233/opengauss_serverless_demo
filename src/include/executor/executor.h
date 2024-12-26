@@ -119,7 +119,7 @@ extern inline bool is_errmodule_enable(int elevel, ModuleId mod_id);
     (node->numGroups / SET_DOP(node->plan.dop) > 0 ? node->numGroups / SET_DOP(node->plan.dop) : 1)
 
 #define HAS_INSTR(node, dnonly) \
-    (!dnonly || IS_PGXC_DATANODE) && u_sess->instr_cxt.global_instr != NULL && (node)->ps.instrument != NULL
+    (!dnonly || IS_PGXC_DATANODE) && (node)->ps.instrument != NULL
 
 /*
  * recursive union macro
