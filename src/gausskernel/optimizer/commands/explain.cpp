@@ -1821,6 +1821,12 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     if (plan_info.strategy == "") {
         plan_info.strategy = "empty";
     }
+    if (planstate->instrument) {
+        Instrumentation *instrument = planstate->instrument;
+        InstrEndLoop(planstate->instrument);
+        get_datanode_info(plan_info, planstate);
+        query_info->operator_mem += plan_info.peak_mem;
+    }
     plan_info.type = nodeTag(plan);
 
     switch (nodeTag(plan)) {
@@ -1960,12 +1966,6 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
      * We have to forcibly clean up the instrumentation state because we
      * haven't done ExecutorEnd yet.  This is pretty grotty ...
      */
-    if (planstate->instrument) {
-        Instrumentation *instrument = planstate->instrument;
-        InstrEndLoop(planstate->instrument);
-        get_datanode_info(plan_info, planstate);
-        query_info->operator_mem += plan_info.peak_mem;
-    }
     query_info->total_costs += plan->total_cost;
 
     // /* target list */
