@@ -299,6 +299,12 @@ if(${USE_LIBXML})
     list(APPEND gaussdb_LINK_DIRS ${LIBXML_LIB_PATH})
 endif()
 
+if(${USE_ONNX})
+    include_directories(${ONNX_INCLUDE_PATH})
+    list(APPEND gaussdb_LINK_LIBS -lonnxruntime)
+    list(APPEND gaussdb_LINK_DIRS ${ONNX_LIB_PATH})
+endif()
+
 if(NOT "${ENABLE_LITE_MODE}" STREQUAL "ON")
     list(APPEND gaussdb_LINK_LIBS -lz -lminiunz -leSDKOBS -leSDKLogAPI -lpcre -liconv -lnghttp2 -llog4cpp -lcurl -llz4 -lcjson -l${JEMALLOC_LIB_NAME} -lcgroup -lzstd -lcom_err_gauss -lgssapi_krb5_gauss -lkrb5_gauss -lgssrpc_gauss -lk5crypto_gauss -lkadm5clnt_mit -lkadm5srv_mit -lkdb5 -lkrb5support_gauss -lstdc++ -lboost_thread -lboost_chrono -lboost_system -lboost_atomic -lxml2 -laio -lncurses -ltinfo -latomic)
 else()
@@ -310,6 +316,7 @@ if(NOT "${ENABLE_JEMALLOC}" STREQUAL "ON")
 endif()
 
 include_directories(
+    ${ONNX_INCLUDE_PATH}
     ${LIBCURL_INCLUDE_PATH}
     ${LIBOPENSSL_INCLUDE_PATH}
     ${LIBLLVM_INCLUDE_PATH}

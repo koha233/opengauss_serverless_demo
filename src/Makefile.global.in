@@ -272,6 +272,7 @@ ifeq ($(with_3rd), NONE)
   INSTALL_TOOLS_PATH = binarylibs/install_tools
   COMPONENTPATH = binarylibs/component
 
+  ONNX_HOME = $(top_builddir)/$(BINARYPATH)/onnxruntime
   PROTOBUF_HOME = $(top_builddir)/$(BINARYPATH)/protobuf
   JEMALLOC_HOME = $(top_builddir)/$(BINARYPATH)/jemalloc/$(JEMALLOC_BUILD_TYPE)
   MEMCHECK_HOME = $(top_builddir)/$(BINARYPATH)/memcheck/$(MEMCHECK_BUILD_TYPE)
@@ -333,6 +334,7 @@ else
   KERBEROS_HOME = $(with_3rd)/$(BINARYPATH)/kerberos/$(LIB_SUPPORT_LLT)
   BOOST_HOME = $(with_3rd)/$(BINARYPATH)/boost/$(LIB_SUPPORT_LLT)
   PROTOBUF_HOME = $(with_3rd)/$(BINARYPATH)/protobuf
+  ONNX_HOME = $(with_3rd)/$(BINARYPATH)/onnxruntime
   ifeq ($(with_tassl), yes)
     LIBOPENSSL_HOME = $(with_3rd)/$(BINARYPATH)/tassl/$(LIB_NOT_SUPPORT_LLT)
   else
@@ -428,6 +430,12 @@ endif
 
 JEMALLOC_INCLUDE_PATH = $(JEMALLOC_HOME)/include
 JEMALLOC_LIB_PATH = $(JEMALLOC_HOME)/lib
+
+#############################################################################
+# onnx component
+#############################################################################
+# ONNX_INCLUDE_PATH = $(ONNX_HOME)/include
+# ONNX_LIB_PATH = $(ONNX_HOME)/lib
 
 #############################################################################
 # protobuf component

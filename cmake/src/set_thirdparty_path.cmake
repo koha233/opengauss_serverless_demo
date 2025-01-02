@@ -101,6 +101,7 @@ if("${GCC_LIB_PATH}" STREQUAL "")
     set(MEMCHECK_HOME ${DEPENDENCY_PATH}/memcheck/${MEMCHECK_BUILD_TYPE})
     set(MEMCHECK_LIB_PATH ${MEMCHECK_HOME}/gcc${GCC_VERSION}/lib/)
 endif()
+set(ONNX_HOME ${DEPENDENCY_PATH}/onnxruntime)
 #############################################################################
 # protobuf
 #############################################################################
@@ -359,3 +360,10 @@ set(GTEST_LIB_PATH ${GTEST_HOME}/lib)
 set(MOCKCPP_INCLUDE_PATH ${MOCKCPP_HOME}/include)
 set(MOCKCPP_LIB_PATH ${MOCKCPP_HOME}/lib)
 set(MOCKCPP_3RDPARTY_PATH ${MOCKCPP_HOME}/3rdparty)
+
+############################################################################
+# onnxruntime
+############################################################################
+set(ONNX_INCLUDE_PATH ${ONNX_HOME}/include)
+set(ONNX_LIB_PATH ${ONNX_HOME}/lib)
+

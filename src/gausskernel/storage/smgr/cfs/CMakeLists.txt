@@ -13,6 +13,7 @@ set(TGT_cfs_INC
         ${EVENT_INCLUDE_PATH}
         ${PROTOBUF_INCLUDE_PATH}
         ${ZLIB_INCLUDE_PATH}
+        ${ONNX_INCLUDE_PATH}
 )
 
 set(cfs_DEF_OPTIONS ${MACRO_OPTIONS})

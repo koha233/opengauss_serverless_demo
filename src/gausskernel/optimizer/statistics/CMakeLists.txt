@@ -12,6 +12,7 @@ set(TGT_statistics_INC
     ${EVENT_INCLUDE_PATH}
     ${PROTOBUF_INCLUDE_PATH}
     ${ZLIB_INCLUDE_PATH}
+    ${ONNX_INCLUDE_PATH}
 )
 
 set(statistics_DEF_OPTIONS ${MACRO_OPTIONS})

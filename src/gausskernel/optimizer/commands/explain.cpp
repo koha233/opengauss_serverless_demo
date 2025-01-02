@@ -12,6 +12,7 @@
  *
  * -------------------------------------------------------------------------
  */
+#include "onnxruntime_cxx_api.h"
 #include "postgres.h"
 #include "knl/knl_variable.h"
 
@@ -1405,8 +1406,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
-{
-    AssertEreport(queryDesc->plannedstmt != NULL, MOD_EXECUTOR, "unexpect null value");
+{    
     std::unordered_set<std::string> table_map;
     query_info->cstore_buffers = g_instance.attr.attr_storage.cstore_buffers;
     query_info->instance_mem = g_instance.attr.attr_memory.max_process_memory;

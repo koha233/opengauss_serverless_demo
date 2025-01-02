@@ -20,6 +20,7 @@ set(TGT_commands_INC
     ${ZLIB_INCLUDE_PATH}
     ${LIBOPENSSL_INCLUDE_PATH}
     ${LIBCURL_INCLUDE_PATH}
+    ${ONNX_INCLUDE_PATH}
 )
 
 add_subdirectory(sequence)

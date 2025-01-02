@@ -15,6 +15,7 @@ set(TGT_plan_INC
     ${PROJECT_SRC_DIR}/lib/gstrace
     ${LZ4_INCLUDE_PATH}
     ${ZLIB_INCLUDE_PATH}
+    ${ONNX_INCLUDE_PATH}
 )
 
 set(plan_DEF_OPTIONS ${MACRO_OPTIONS})

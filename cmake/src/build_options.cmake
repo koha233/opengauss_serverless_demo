@@ -100,6 +100,7 @@ option(HAVE_POSIX_SIGNALS "enable posix signals, this set to default" ON)
 option(HAVE_GCC_INT_ATOMICS "enable gcc buildin atomics operations, this set to default" ON)
 option(FLEXIBLE_ARRAY_MEMBER "pq_ce need" ON)
 option(ENABLE_OPENEULER_MAJOR "support openEuler 22.03 LTS, this set to default" OFF)
+option(USE_ONNX "use onnxruntime" ON)
 
 # we will differ compile flags and definitions by different vars
 set(DB_COMMON_DEFINE "")
@@ -284,6 +285,12 @@ if(${USE_PROTOBUF})
     set(LIBS "${LIBS} -lprotobuf -lgrpc++ -lgrpc -lgpr")
     set(GAUSSDB_CONFIGURE "${GAUSSDB_CONFIGURE} -DUSE_PROTOBUF")
 endif()
+
+if(${USE_ONNX})
+    set(LIBS "${LIBS} -lonnxruntime")
+    set(GAUSSDB_CONFIGURE "${GAUSSDB_CONFIGURE} -DUSE_ONNX")
+endif()
+
 add_definitions(-Wno-builtin-macro-redefined)
 SET_GCC_FLAGS(DB_COMMON_FLAGS "")
 
