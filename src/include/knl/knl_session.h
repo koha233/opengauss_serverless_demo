@@ -3018,6 +3018,7 @@ typedef struct knl_plan_info_context{
     std::string operator_type;
     std::string strategy;
     double total_time;
+    double start_up_time;
     double execution_time;
     double start_up_costs;
     double exec_costs;

@@ -1403,6 +1403,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.agg_col = 0;
     plan_info.agg_build_time = 0;
     plan_info.agg_hash_time = 0;
+    plan_info.start_up_time = 0;
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1445,6 +1446,7 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
     }
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
     UpdateExecutionTimes(query_info);
+    Reset_Input_rows(query_info, queryDesc->planstate->plan);
 }
 
 bool IsFileEmpty(std::ofstream &file)
@@ -1494,7 +1496,7 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
 
     // 如果没有子节点，直接返回
     if (plan.child_plan_ids.empty()) {
-        plan.execution_time =  plan.total_time;
+        plan.execution_time =  plan.total_time - plan.start_up_time;
         return;
     }
 
@@ -1512,12 +1514,26 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
         }
     }
 
-    // 更新当前节点的 execution_time
-    if (plan.type != NodeTag::T_VecStream) {
-        plan.execution_time =  plan.total_time-max_child_execution_time;
-    }
-    else{
-        plan.execution_time =  plan.total_time;
+    switch (plan.type) {
+        case T_Agg: 
+        case T_VecAgg:
+        case T_HashJoin:
+        case T_MergeJoin:
+        case T_VecHashJoin:
+        case T_Material:
+        case T_VecWindowAgg:
+        {
+            // 更新当前节点的 execution_time
+            if (plan.type != NodeTag::T_VecStream) {
+                plan.execution_time = plan.total_time - max_child_execution_time;
+            } else {
+                plan.execution_time = plan.total_time;
+            }
+            break;
+        }
+        default:
+            plan.execution_time = plan.total_time - plan.start_up_time;
+            break;
     }
 }
 
@@ -1526,6 +1542,29 @@ void UpdateExecutionTimes(knl_query_info_context* query_info) {
 
     // 从根节点开始递归更新
     UpdateExecutionTimesRecursive(query_info, root_plan_id);
+}
+
+void Reset_Input_rows(knl_query_info_context* query_info, Plan* plan){
+    if (plan == nullptr) {
+        return; // 空节点直接返回
+    }
+    // 递归设置左子树
+    if (plan->lefttree != nullptr) {
+        Reset_Input_rows(query_info, plan->lefttree);
+        query_info->Plans[plan->map_id].l_input_rows = query_info->Plans[plan->lefttree->map_id].actural_rows;
+    }
+
+    // 递归设置右子树
+    if (plan->righttree != nullptr) {
+        Reset_Input_rows(query_info, plan->righttree);
+        query_info->Plans[plan->map_id].r_input_rows = query_info->Plans[plan->righttree->map_id].actural_rows;
+    }
+}
+
+void FixExecutionTimes(knl_query_info_context* query_info){
+    for (auto& plan_pair: query_info->Plans){
+        plan_pair.second.execution_time = plan_pair.second.total_time - plan_pair.second.start_up_time;
+    }
 }
 
 
@@ -1651,8 +1690,10 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
 {
     Instrumentation *instr = NULL;
     double exec_sec_max = -1;
+    double start_up_sec_min = HUGE_VAL - 1;
     double rows = 0;
     double exec_sec;
+    double start_up_sec;
     int width_min = (int)(0x6FFFFFFF);
     int width_max = 0;
     bool executed = true;
@@ -1695,6 +1736,8 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                         ex_cyc_rows = proRows != 0 ? (long)(exCycles / proRows) : 0;
                         rows += instr->ntuples;
                         exec_sec = 1000.0 * instr->total;
+                        start_up_sec = 1000.0 * instr->startup;
+                        start_up_sec_min = rtl::min(start_up_sec_min, start_up_sec);
                         exec_sec_max = rtl::max(exec_sec_max, exec_sec);
                         plan_info.peak_mem += instr->memoryinfo.peakOpMemory / 1024;
                         width_min = rtl::min(width_min, instr->width);
@@ -1717,10 +1760,12 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
         plan_info.actural_rows = rows;
         plan_info.total_time = exec_sec_max;
         plan_info.actural_width = width_max;
+        plan_info.start_up_time = start_up_sec_min;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
         Instrumentation *instrument = planstate->instrument;
         plan_info.actural_rows =  instrument->ntuples;
         plan_info.total_time = 1000.0 * instrument->total;
+        plan_info.start_up_time = 1000.0 * instrument->startup;
         plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
         const BufferUsage *buf_usage = &planstate->instrument->bufusage;
         has_timing =
@@ -1748,7 +1793,8 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     plan_info.agg_col = plan->numCols;
     switch (((Agg *)plan)->aggstrategy) {
         case AGG_SORTED:
-        case AGG_HASHED: {
+        case AGG_HASHED: 
+        {
             PlanState *planstate = (PlanState *)aggstate;
             if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr) {
                 Instrumentation *instr = NULL;
@@ -2001,6 +2047,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     // ExplainPropertyLong("Exclusive Cycles Per Row", proRows != 0 ? (long)(exCycles / proRows) : 0, es);
     // ExplainPropertyLong("Exclusive Cycles", (long)exCycles, es);
     // ExplainPropertyLong("Inclusive Cycles", (long)incCycles, es);
+    plan->map_id = query_info->operator_num;
     plan_info.plan_id = query_info->operator_num;
     plan_info.dop = plan->dop;
     query_info->Plans.insert({query_info->operator_num, plan_info});

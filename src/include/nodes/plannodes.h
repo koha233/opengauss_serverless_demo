@@ -242,6 +242,7 @@ typedef struct Plan {
 
     int plan_node_id;   /* node id */
     int parent_node_id; /* parent node id */
+    int map_id;
     RemoteQueryExecType exec_type;
 
     /*
