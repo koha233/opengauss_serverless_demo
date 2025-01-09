@@ -1168,6 +1168,7 @@ typedef struct HashJoin {
     OpMemInfo mem_info; /* Memory info for inner hash table */
     double joinRows;
     List* hash_collations;
+    double inner_bucket_size;
 #ifdef USE_SPQ
     List *hashqualclauses;
 #endif

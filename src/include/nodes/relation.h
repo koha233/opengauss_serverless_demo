@@ -1570,6 +1570,7 @@ typedef struct HashPath {
     int num_batches;        /* number of batches expected */
     OpMemInfo mem_info;     /* Mem info for hash table */
     double joinRows;
+    double inner_bucket_size;
 } HashPath;
 
 #ifdef PGXC

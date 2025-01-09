@@ -1404,6 +1404,8 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.agg_build_time = 0;
     plan_info.agg_hash_time = 0;
     plan_info.start_up_time = 0;
+    plan_info.nloops = 0;
+    plan_info.hash_buckets = 0;
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1496,7 +1498,7 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
 
     // 如果没有子节点，直接返回
     if (plan.child_plan_ids.empty()) {
-        plan.execution_time =  plan.total_time - plan.start_up_time;
+        plan.execution_time =  plan.total_time;
         return;
     }
 
@@ -1515,24 +1517,20 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
     }
 
     switch (plan.type) {
-        case T_Agg: 
-        case T_VecAgg:
-        case T_HashJoin:
-        case T_MergeJoin:
-        case T_VecHashJoin:
-        case T_Material:
-        case T_VecWindowAgg:
+        case T_CteScan : 
+        case T_NestLoop :
+        case T_VecNestLoop :
         {
+            plan.execution_time = plan.total_time - plan.start_up_time;
+            break;
+        }
+        default:
             // 更新当前节点的 execution_time
             if (plan.type != NodeTag::T_VecStream) {
                 plan.execution_time = plan.total_time - max_child_execution_time;
             } else {
                 plan.execution_time = plan.total_time;
             }
-            break;
-        }
-        default:
-            plan.execution_time = plan.total_time - plan.start_up_time;
             break;
     }
 }
@@ -1608,7 +1606,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         if (IsFileEmpty(plan_file)) {
             plan_file << "query_id;plan_id;dop;operator_type;"
                       << "execution_time;estimate_costs;estimate_rows;"
-                      << "actural_rows;l_input_rows;r_input_rows;"
+                      << "actural_rows;l_input_rows;r_input_rows;nloops"
                       << "peak_mem;cstore_buffers;instance_mem;"
                       << "width;table_names;" // 写入表头
                       << "agg_col;agg_width;build_time;hash_time\n";  // 写入表头
@@ -1617,7 +1615,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" << plan.operator_type << ";" 
                       << plan.execution_time << ";" << plan.exec_costs << ";" 
                       << plan.estimate_rows << ";" << plan.actural_rows << ";" 
-                      << plan.l_input_rows << ";" << plan.r_input_rows << ";" 
+                      << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" 
                       << plan.estimate_width << ";" << plan.table_names << ";"
                       << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << "\n";  // 写入计划信息
@@ -1757,13 +1755,15 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
             }
         }
         plan_info.ex_cycles_per_row = rows != 0 ? plan_info.ex_cycles / rows : 0;
-        plan_info.actural_rows = rows;
+        plan_info.actural_rows = instr->ntuples / instr->nloops;
+        plan_info.nloops = instr->nloops;
         plan_info.total_time = exec_sec_max;
         plan_info.actural_width = width_max;
         plan_info.start_up_time = start_up_sec_min;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
         Instrumentation *instrument = planstate->instrument;
-        plan_info.actural_rows =  instrument->ntuples;
+        plan_info.actural_rows = rows / instr->nloops;
+        plan_info.nloops = instr->nloops;
         plan_info.total_time = 1000.0 * instrument->total;
         plan_info.start_up_time = 1000.0 * instrument->startup;
         plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
@@ -1831,6 +1831,10 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
         default:
             break;
     }
+}
+
+void get_hash_plan_info(knl_plan_info_context& plan_info, HashJoinState *hashjoinstate){
+    
 }
 
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
@@ -1950,6 +1954,10 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
                 plan_info.table_names += table_name;
             }
         } break;
+        // case T_Material:
+        // case T_VecMaterial:{
+        //     plan_info.actural_rows = plan_info.l_input_rows;
+        // }
         case T_NestLoop:
         case T_VecNestLoop:
         case T_VecMergeJoin:

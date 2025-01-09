@@ -509,6 +509,7 @@ extern void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const 
 extern void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_id);
 extern void Reset_Input_rows(knl_query_info_context* query_info, Plan* plan);
 extern void get_agg_plan_info(knl_plan_info_context& plan_info, AggState *aggstate);
+extern void get_hash_plan_info(knl_plan_info_context& plan_info, HashJoinState *hashjoinstate);
 extern void UpdateExecutionTimes(knl_query_info_context* query_info);
 extern void FixExecutionTimes(knl_query_info_context* query_info);
 extern bool IsFileEmpty(std::ofstream &file);

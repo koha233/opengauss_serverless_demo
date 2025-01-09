@@ -3033,6 +3033,8 @@ typedef struct knl_plan_info_context{
     int l_input_rows;
     int r_input_rows;
     int actural_rows;
+    int nloops;
+    int hash_buckets;
     int64 peak_mem;
     int agg_width;
     int agg_col;
