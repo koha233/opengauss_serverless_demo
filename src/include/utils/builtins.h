@@ -929,6 +929,7 @@ extern void deparse_targetlist(Query* query, List* targetList, StringInfo buf);
 #endif
 extern List* deparse_context_for(const char* aliasname, Oid relid);
 extern List* deparse_context_for_planstate(Node* planstate, List* ancestors, List* rtable);
+extern List* deparse_context_for_scan(Node* plan, List* ancestors, List* rtable);
 #ifdef PGXC
 extern List* deparse_context_for_plan(Node* plan, List* ancestors, List* rtable);
 #endif

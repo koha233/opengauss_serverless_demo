@@ -143,6 +143,12 @@ static void show_expression(Node *node, const char *qlabel, PlanState *planstate
                             ExplainState *es);
 static void show_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, bool useprefix,
                       ExplainState *es);
+
+static char* get_scan_qual(List *qual, PlanState *planstate, List *ancestors, List *rtable);
+static char* get_scan_qual_plan(List *qual, Plan *plan, List *ancestors, List *rtable);
+static char* get_upper_qual(List *qual, PlanState *planstate, List *ancestors, List *rtable);
+static char* get_upper_qual_plan(List *qual, Plan *plan, List *ancestors, List *rtable);
+
 static void show_scan_qual(List *qual, const char *qlabel, PlanState *planstate, List *ancestors, ExplainState *es,
                            bool show_prefix = false);
 static void show_skew_optimization(const PlanState *planstate, ExplainState *es);
@@ -1378,6 +1384,85 @@ void ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
         ExplainNode<false>(queryDesc->planstate, NIL, NULL, NULL, es);
 }
 
+static char* get_scan_qual(List *qual, PlanState *planstate, List *ancestors, List *rtable)
+{
+    bool useprefix = (IsA(planstate->plan, SubqueryScan) || IsA(planstate->plan, VecSubqueryScan));
+    Node *node = NULL;
+
+    /* No work if empty qual */
+    if (qual == NIL)
+        return "";
+
+    /* Convert AND list to explicit AND */
+    node = (Node *)make_ands_explicit(qual);
+    List *context = NIL;
+    char *exprstr = NULL;
+
+    /* Set up deparsing context */
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, rtable);
+
+    /* Deparse the expression */
+    return deparse_expression(node, context, useprefix, false);
+}
+
+static char* get_scan_qual_plan(List *qual, Plan *plan, List *ancestors, List *rtable)
+{
+    bool useprefix = (IsA(plan, SubqueryScan) || IsA(plan, VecSubqueryScan));
+    Node *node = NULL;
+
+    /* No work if empty qual */
+    if (qual == NIL)
+        return "";
+
+    /* Convert AND list to explicit AND */
+    node = (Node *)make_ands_explicit(qual);
+    List *context = NIL;
+    char *exprstr = NULL;
+    /* Set up deparsing context */
+    context = deparse_context_for_scan((Node *)plan, ancestors, rtable);
+
+    /* Deparse the expression */
+    return deparse_expression(node, context, useprefix, false);
+}
+static char* get_upper_qual(List *qual, PlanState *planstate, List *ancestors, List *rtable){
+    bool useprefix = (list_length(rtable) > 1);
+    Node *node = NULL;
+
+    /* No work if empty qual */
+    if (qual == NIL)
+        return "";
+
+    /* Convert AND list to explicit AND */
+    node = (Node *)make_ands_explicit(qual);
+    List *context = NIL;
+    char *exprstr = NULL;
+
+    /* Set up deparsing context */
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, rtable);
+
+    /* Deparse the expression */
+    return deparse_expression(node, context, useprefix, false);
+};
+
+static char* get_upper_qual_plan(List *qual, Plan *plan, List *ancestors, List *rtable){
+        bool useprefix = (list_length(rtable) > 1);
+    Node *node = NULL;
+
+    /* No work if empty qual */
+    if (qual == NIL)
+        return "";
+
+    /* Convert AND list to explicit AND */
+    node = (Node *)make_ands_explicit(qual);
+    List *context = NIL;
+    char *exprstr = NULL;
+
+    /* Set up deparsing context */
+    context = deparse_context_for_scan((Node *)plan, ancestors, rtable);
+
+    /* Deparse the expression */
+    return deparse_expression(node, context, useprefix, false);
+}
 void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* query_info){
     plan_info.plan_id = -1;
     plan_info.dop = 1;
@@ -1389,6 +1474,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.estimate_rows = 0;
     plan_info.actural_rows = 0;
     plan_info.io_time = 0;
+    plan_info.query_dop = query_info->dop;
     plan_info.ex_cycles_per_row = 0;
     plan_info.ex_cycles = 0;
     plan_info.incCycles = 0;
@@ -1406,6 +1492,11 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.start_up_time = 0;
     plan_info.nloops = 0;
     plan_info.hash_buckets = 0;
+    plan_info.hash_bucket_size = 0;
+    plan_info.filter = "";
+    plan_info.index_names = "";
+    plan_info.join_names = "";
+    plan_info.predicate_cost = 0;
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1511,15 +1602,14 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
         if (plan.type != NodeTag::T_VecStream) {
             // 更新最大子节点执行时间
             if (query_info->Plans.find(child_id) != query_info->Plans.end()) {
-                max_child_execution_time = std::max(max_child_execution_time, query_info->Plans[child_id].total_time);
+                max_child_execution_time += query_info->Plans[child_id].total_time;
             }
         }
     }
 
     switch (plan.type) {
         case T_CteScan : 
-        case T_NestLoop :
-        case T_VecNestLoop :
+        case T_VecScan : 
         {
             plan.execution_time = plan.total_time - plan.start_up_time;
             break;
@@ -1529,7 +1619,7 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
             if (plan.type != NodeTag::T_VecStream) {
                 plan.execution_time = plan.total_time - max_child_execution_time;
             } else {
-                plan.execution_time = plan.total_time;
+                plan.execution_time = plan.total_time - plan.start_up_time;
             }
             break;
     }
@@ -1604,20 +1694,21 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     std::ofstream plan_file(folder_path + "/plan_info.csv", std::ios::app);  // 以追加模式打开文件
     if (plan_file.is_open()) {
         if (IsFileEmpty(plan_file)) {
-            plan_file << "query_id;plan_id;dop;operator_type;"
+            plan_file << "query_id;plan_id;dop;query_dop;operator_type;"
                       << "execution_time;estimate_costs;estimate_rows;"
-                      << "actural_rows;l_input_rows;r_input_rows;nloops"
-                      << "peak_mem;cstore_buffers;instance_mem;"
-                      << "width;table_names;" // 写入表头
+                      << "actural_rows;l_input_rows;r_input_rows;nloops;"
+                      << "peak_mem;cstore_buffers;instance_mem;width;"
+                      << "table_names;index_names;filter;join_names;predicate_cost;" // 写入表头
                       << "agg_col;agg_width;build_time;hash_time\n";  // 写入表头
         }
         for (const auto& [plan_id, plan] : query_info->Plans) {
-            plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" << plan.operator_type << ";" 
+            plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
+                      << plan.query_dop << ";" << plan.operator_type << ";" 
                       << plan.execution_time << ";" << plan.exec_costs << ";" 
                       << plan.estimate_rows << ";" << plan.actural_rows << ";" 
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
-                      << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" 
-                      << plan.estimate_width << ";" << plan.table_names << ";"
+                      << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
+                      << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
                       << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << "\n";  // 写入计划信息
         }
 
@@ -1755,18 +1846,18 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
             }
         }
         plan_info.ex_cycles_per_row = rows != 0 ? plan_info.ex_cycles / rows : 0;
-        plan_info.actural_rows = instr->ntuples / instr->nloops;
+        plan_info.actural_rows = rows;
         plan_info.nloops = instr->nloops;
         plan_info.total_time = exec_sec_max;
         plan_info.actural_width = width_max;
         plan_info.start_up_time = start_up_sec_min;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
-        Instrumentation *instrument = planstate->instrument;
-        plan_info.actural_rows = rows / instr->nloops;
+        instr = planstate->instrument;
+        plan_info.actural_rows = instr->ntuples;
         plan_info.nloops = instr->nloops;
-        plan_info.total_time = 1000.0 * instrument->total;
-        plan_info.start_up_time = 1000.0 * instrument->startup;
-        plan_info.peak_mem = instrument->memoryinfo.peakOpMemory / 1024;
+        plan_info.total_time = 1000.0 * instr->total;
+        plan_info.start_up_time = 1000.0 * instr->startup;
+        plan_info.peak_mem = instr->memoryinfo.peakOpMemory / 1024;
         const BufferUsage *buf_usage = &planstate->instrument->bufusage;
         has_timing =
             (!INSTR_TIME_IS_ZERO(buf_usage->blk_read_time) || !INSTR_TIME_IS_ZERO(buf_usage->blk_write_time));
@@ -1774,11 +1865,11 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
         }
-        const CPUUsage *cpu_usage = &instrument->cpuusage;
+        const CPUUsage *cpu_usage = &instr->cpuusage;
         show_child_cpu_cycles_and_rows<false>(planstate, 0, 0, &outerCycles, &innerCycles, &outterRows, &innerRows);
         incCycles = cpu_usage->m_cycles;
         exCycles = incCycles - outerCycles - innerCycles;
-        proRows = (long)(instrument->ntuples);
+        proRows = (long)(instr->ntuples);
         CalculateProcessedRows(planstate, 0, 0, &innerRows, &outterRows, &proRows);
         plan_info.incCycles = incCycles;
         plan_info.ex_cycles = exCycles;
@@ -1834,7 +1925,7 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
 }
 
 void get_hash_plan_info(knl_plan_info_context& plan_info, HashJoinState *hashjoinstate){
-    
+    plan_info.hash_buckets = hashjoinstate->hj_HashTable->nbuckets;
 }
 
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
@@ -1910,6 +2001,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
                     plan_info.table_names += table_name;
                 }
             }
+            plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
         } break;
         case T_IndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
@@ -1918,6 +2010,8 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
                 }
                 plan_info.table_names += table_name;
             }
+            plan_info.index_names = get_scan_qual(((IndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
+            plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
         } break;
 #ifdef USE_SPQ
         case T_SpqIndexOnlyScan:
@@ -1929,8 +2023,11 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
                 }
                 plan_info.table_names += table_name;
             }
+            plan_info.index_names = get_scan_qual(((IndexOnlyScan *)plan)->indexqual, planstate, ancestors, rtable);
+            plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
         } break;
         case T_BitmapIndexScan: {
+            plan_info.index_names = get_scan_qual(((BitmapIndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
         } break;
         case T_CStoreIndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
@@ -1939,8 +2036,11 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
                 }
                 plan_info.table_names += table_name;
             }
+            plan_info.index_names = get_scan_qual(((CStoreIndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
+            plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
         } break;
         case T_CStoreIndexCtidScan: {
+            plan_info.filter = get_scan_qual(((CStoreIndexCtidScan *)plan)->indexqualorig, planstate, ancestors, rtable);
         } break;
         case T_ModifyTable:
         case T_VecModifyTable: {
@@ -1960,17 +2060,33 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         // }
         case T_NestLoop:
         case T_VecNestLoop:
+        {
+            NestLoop *nestLoop = (NestLoop *)plan;
+            plan_info.join_names = get_upper_qual(((NestLoop *)plan)->join.joinqual, planstate, ancestors, rtable);
+            plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
+        }break;
         case T_VecMergeJoin:
         case T_MergeJoin:
+        {
+            MergeJoin *mergeJoin = (MergeJoin *)plan;
+            plan_info.join_names = get_upper_qual(mergeJoin->mergeclauses, planstate, ancestors, rtable);
+            plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
+        }break;
         case T_HashJoin:
         case T_VecHashJoin:
+        {
+            HashJoin *hashjoin = (HashJoin *)plan;
+            plan_info.join_names = get_upper_qual(hashjoin->hashclauses,  planstate, ancestors, rtable);
+            plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
+            plan_info.hash_bucket_size = hashjoin->inner_bucket_size;
+            get_hash_plan_info(plan_info, (HashJoinState *)planstate);
+        }break;
         case T_SetOp:
         case T_VecSetOp:
         case T_PartIterator:
         case T_Append:
         case T_VecAppend:
         case T_RecursiveUnion:
-            break;
         case T_VecAgg:
         case T_Agg: {
             get_agg_plan_info(plan_info, (AggState *)planstate);

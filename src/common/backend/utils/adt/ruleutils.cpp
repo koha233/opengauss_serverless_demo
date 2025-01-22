@@ -264,6 +264,7 @@ static void print_function_ora_arguments(StringInfo buf, HeapTuple proctup);
 static void print_function_rettype(StringInfo buf, HeapTuple proctup);
 static void print_parallel_enable(StringInfo buf, HeapTuple procTup, int2 parallelCursorSeq, Oid funcid);
 static void set_deparse_planstate(deparse_namespace* dpns, PlanState* ps);
+static void deparse_plan(deparse_namespace* dpns, Plan* plan);
 #ifdef PGXC
 static void set_deparse_plan(deparse_namespace* dpns, Plan* plan);
 #endif
@@ -5437,6 +5438,22 @@ List* deparse_context_for_planstate(Node* planstate, List* ancestors, List* rtab
     return list_make1(dpns);
 }
 
+List* deparse_context_for_scan(Node* plan, List* ancestors, List* rtable){
+    deparse_namespace* dpns = NULL;
+    dpns = (deparse_namespace*)palloc0(sizeof(deparse_namespace));
+
+    /* Initialize fields that stay the same across the whole plan tree */
+    dpns->rtable = rtable;
+    dpns->ctes = NIL;
+
+    /* Set our attention on the specific plan node passed in */
+    deparse_plan(dpns, (Plan*)plan);
+    dpns->ancestors = ancestors;
+
+    /* Return a one-deep namespace stack */
+    return list_make1(dpns);
+}
+
 /*
  * set_deparse_planstate: set up deparse_namespace to parse subexpressions
  * of a given PlanState node
@@ -5447,6 +5464,48 @@ List* deparse_context_for_planstate(Node* planstate, List* ancestors, List* rtab
  * not need to change when shifting attention to different plan nodes in a
  * single plan tree.
  */
+
+void deparse_plan(deparse_namespace *dpns, Plan *plan)
+{
+    /*
+     * For a SubqueryScan, pretend the subplan is INNER referent.  (We don't
+     * use OUTER because that could someday conflict with the normal meaning.)
+     * Likewise, for a CteScan, pretend the subquery's plan is INNER referent.
+     * For DUPLICATE KEY UPDATE we just need the inner tlist to point to the
+     * excluded expression's tlist. (Similar to the SubqueryScan we don't want
+     * to reuse OUTER, it's used for RETURNING in some modify table cases,
+     * although not INSERT ... ON DUPLICATE KEY UPDATE).
+     */
+    if (IsA(plan, SubqueryScan)) {
+        dpns->planstate = (PlanState *)makeNode(SubqueryScanState);
+        dpns->planstate->plan = plan;
+        dpns->inner_planstate = (PlanState *)makeNode(PlanState);
+        dpns->inner_planstate->plan = plan;
+    } else if (IsA(plan, VecSubqueryScan)) {
+        dpns->planstate = (PlanState *)makeNode(VecSubqueryScanState);
+        dpns->planstate->plan = plan;
+        dpns->inner_planstate = (PlanState *)makeNode(PlanState);
+        dpns->inner_planstate->plan = plan;
+    } else if (IsA(plan, CteScan)) {
+        dpns->planstate = (PlanState *)makeNode(CteScanState);
+        dpns->planstate->plan = plan;
+        dpns->inner_planstate = (PlanState *)makeNode(PlanState);
+        dpns->inner_planstate->plan = plan;
+    } else {
+        dpns->inner_planstate = (PlanState *)makeNode(PlanState);
+        dpns->inner_planstate->plan = plan;
+    }
+    /* index_tlist is set only if it's an IndexOnlyScan */
+    if (IsA(plan, IndexOnlyScan))
+        dpns->index_tlist = ((IndexOnlyScan *)plan)->indextlist;
+    else if (IsA(plan, ForeignScan))
+        dpns->index_tlist = ((ForeignScan *)plan)->fdw_scan_tlist;
+    else if (IsA(plan, ExtensiblePlan))
+        dpns->index_tlist = ((ExtensiblePlan *)plan)->extensible_plan_tlist;
+    else
+        dpns->index_tlist = NIL;
+}
+
 static void set_deparse_planstate(deparse_namespace* dpns, PlanState* ps)
 {
     dpns->planstate = ps;

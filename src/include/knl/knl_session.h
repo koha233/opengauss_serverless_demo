@@ -3035,12 +3035,18 @@ typedef struct knl_plan_info_context{
     int actural_rows;
     int nloops;
     int hash_buckets;
+    int hash_bucket_size;
+    int predicate_cost;
     int64 peak_mem;
     int agg_width;
     int agg_col;
+    int query_dop;
     double agg_build_time;
     double agg_hash_time;
     std::string table_names;
+    std::string index_names;
+    std::string join_names;
+    std::string filter;
     std::vector<int> child_plan_ids;
 } knl_plan_info_context;
 
