@@ -5013,7 +5013,7 @@ static HashJoin* create_hashjoin_plan(PlannerInfo* root, HashPath* best_path, Pl
         set_bloomfilter(root, left_relids, join_plan);
     }
 
-    join_plan->inner_bucket_size = best_path->inner_bucket_size;
+    join_plan->total_mem_size = best_path->total_mem_size;
 
     return join_plan;
 }

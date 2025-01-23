@@ -1491,8 +1491,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.agg_hash_time = 0;
     plan_info.start_up_time = 0;
     plan_info.nloops = 0;
-    plan_info.hash_buckets = 0;
-    plan_info.hash_bucket_size = 0;
+    plan_info.hash_table_size = 0;
     plan_info.filter = "";
     plan_info.index_names = "";
     plan_info.join_names = "";
@@ -1640,6 +1639,9 @@ void Reset_Input_rows(knl_query_info_context* query_info, Plan* plan){
     if (plan->lefttree != nullptr) {
         Reset_Input_rows(query_info, plan->lefttree);
         query_info->Plans[plan->map_id].l_input_rows = query_info->Plans[plan->lefttree->map_id].actural_rows;
+        if(nodeTag(plan) == T_VecHashJoin || nodeTag(plan) == T_HashJoin){
+            query_info->Plans[plan->map_id].hash_table_size *= double(query_info->Plans[plan->map_id].l_input_rows) / plan->lefttree->plan_rows;
+        }
     }
 
     // 递归设置右子树
@@ -1699,7 +1701,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "actural_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" // 写入表头
-                      << "agg_col;agg_width;build_time;hash_time\n";  // 写入表头
+                      << "agg_col;agg_width;build_time;hash_time;hash_table_size\n";  // 写入表头
         }
         for (const auto& [plan_id, plan] : query_info->Plans) {
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
@@ -1709,8 +1711,9 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
-                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << "\n";  // 写入计划信息
-        }
+                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
+                      << plan.hash_table_size << "\n";  // 写入计划信息
+        }             
 
         plan_file.close();
     }
@@ -1924,8 +1927,8 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     }
 }
 
-void get_hash_plan_info(knl_plan_info_context& plan_info, HashJoinState *hashjoinstate){
-    plan_info.hash_buckets = hashjoinstate->hj_HashTable->nbuckets;
+void get_hash_plan_info(knl_plan_info_context& plan_info, VecHashJoinState *hashjoinstate){
+    // plan_info.hash_table_size = hashjoinstate->hj_HashTable->nbuckets;
 }
 
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
@@ -2072,14 +2075,21 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.join_names = get_upper_qual(mergeJoin->mergeclauses, planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
         }break;
-        case T_HashJoin:
+        case T_HashJoin: {
+            {
+                HashJoin *hashjoin = (VecHashJoin *)plan;
+                plan_info.join_names = get_upper_qual(hashjoin->hashclauses, planstate, ancestors, rtable);
+                plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
+            }
+            break;
+        }
         case T_VecHashJoin:
         {
-            HashJoin *hashjoin = (HashJoin *)plan;
+            VecHashJoin *hashjoin = (VecHashJoin *)plan;
             plan_info.join_names = get_upper_qual(hashjoin->hashclauses,  planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
-            plan_info.hash_bucket_size = hashjoin->inner_bucket_size;
-            get_hash_plan_info(plan_info, (HashJoinState *)planstate);
+            plan_info.hash_table_size = hashjoin->total_mem_size;
+            get_hash_plan_info(plan_info, (VecHashJoinState *)planstate);
         }break;
         case T_SetOp:
         case T_VecSetOp:

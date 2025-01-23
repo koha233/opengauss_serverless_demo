@@ -3034,8 +3034,7 @@ typedef struct knl_plan_info_context{
     int r_input_rows;
     int actural_rows;
     int nloops;
-    int hash_buckets;
-    int hash_bucket_size;
+    double hash_table_size;
     int predicate_cost;
     int64 peak_mem;
     int agg_width;

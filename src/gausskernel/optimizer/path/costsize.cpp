@@ -4543,6 +4543,15 @@ void final_cost_hashjoin(PlannerInfo* root, HashPath* path, JoinCostWorkspace* w
         delete es;
         MemoryContextDelete(ExtendedStat);
     }
+    /* 假设每个元组的大小 */
+    double tuple_size = inner_path->pathtarget->width;  // 单个元组占用内存大小，单位：字节
+    double hash_val_size = 8;
+
+
+    /* 计算哈希表总大小 */
+    double total_memory = inner_path_rows * tuple_size + virtualbuckets * hash_val_size;
+
+    path->total_mem_size = total_memory / 1024;
 }
 
 /*
