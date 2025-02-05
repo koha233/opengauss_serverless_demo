@@ -281,8 +281,10 @@ static bool show_scan_distributekey(const Plan *plan)
 #endif /* ENABLE_MULTIPLE_NODES */
 static void show_unique_check_info(PlanState *planstate, ExplainState *es);
 static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, StringInfo str, bool is_pretty);
-
+static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream);
 static void get_datanode_info(knl_plan_info_context &query_info, PlanState *planstate);
+static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info);
+static int ExtractParamIndex(const std::string &filter);
 /*
  * ExplainQuery -
  *	  execute an EXPLAIN command
@@ -1496,6 +1498,10 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.index_names = "";
     plan_info.join_names = "";
     plan_info.predicate_cost = 0;
+    plan_info.stream_poll_time = 0;
+    plan_info.stream_data_copy_time = 0;
+    plan_info.is_visit = false;
+    plan_info.jointype = "none";
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1537,6 +1543,7 @@ void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
         query_info->query_used_mem = query_info->dynamic_peak_memory - query_info->dynamic_startup_memory;
     }
     CollectPlanInfo(query_info, queryDesc->plannedstmt->rtable, queryDesc->planstate, NIL, NULL, NULL);
+    ConnectSubPlansToScanOperators(query_info);
     UpdateExecutionTimes(query_info);
     Reset_Input_rows(query_info, queryDesc->planstate->plan);
 }
@@ -1577,14 +1584,14 @@ void UpdateQueryIdCounter(const std::string &counter_file_path, int new_query_id
         std::cerr << "无法打开计数文件 " << counter_file_path << std::endl;
     }
 }
-void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_id) {
+void UpdateExecutionTimesRecursive(std::unordered_map<int, knl_plan_info_context> &Plans, int plan_id) {
     // 确保当前 plan_id 存在于 Plans 中
-    if (query_info->Plans.find(plan_id) == query_info->Plans.end()) {
+    if (Plans.find(plan_id) == Plans.end()) {
         return;
     }
-
+    Plans[plan_id].is_visit = true;
     // 获取当前节点
-    knl_plan_info_context& plan = query_info->Plans[plan_id];
+    knl_plan_info_context& plan = Plans[plan_id];
 
     // 如果没有子节点，直接返回
     if (plan.child_plan_ids.empty()) {
@@ -1596,12 +1603,12 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
     double max_child_execution_time = 0.0;
     for (int child_id : plan.child_plan_ids) {
         // 递归更新子节点
-        UpdateExecutionTimesRecursive(query_info, child_id);
+        UpdateExecutionTimesRecursive(Plans, child_id);
 
         if (plan.type != NodeTag::T_VecStream) {
             // 更新最大子节点执行时间
-            if (query_info->Plans.find(child_id) != query_info->Plans.end()) {
-                max_child_execution_time += query_info->Plans[child_id].total_time;
+            if (Plans.find(child_id) != Plans.end()) {
+                max_child_execution_time += Plans[child_id].total_time;
             }
         }
     }
@@ -1625,10 +1632,10 @@ void UpdateExecutionTimesRecursive(knl_query_info_context* query_info, int plan_
 }
 
 void UpdateExecutionTimes(knl_query_info_context* query_info) {
-    int root_plan_id = 0;
-
-    // 从根节点开始递归更新
-    UpdateExecutionTimesRecursive(query_info, root_plan_id);
+    for(int i=0; i < query_info->operator_num; i++){
+        if(!query_info->Plans[i].is_visit)
+        UpdateExecutionTimesRecursive(query_info->Plans, i);
+    }
 }
 
 void Reset_Input_rows(knl_query_info_context* query_info, Plan* plan){
@@ -1700,10 +1707,13 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "execution_time;estimate_costs;estimate_rows;"
                       << "actural_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
-                      << "table_names;index_names;filter;join_names;predicate_cost;" // 写入表头
-                      << "agg_col;agg_width;build_time;hash_time;hash_table_size\n";  // 写入表头
+                      << "table_names;index_names;filter;join_names;predicate_cost;" 
+                      << "agg_col;agg_width;build_time;hash_time;hash_table_size;jointype"  
+                      << "stream_poll_time;stream_data_copy_time\n";
         }
-        for (const auto& [plan_id, plan] : query_info->Plans) {
+        for (const auto& pair : query_info->Plans) {
+            auto& plan_id = pair.first;
+            auto& plan = pair.second;
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
                       << plan.query_dop << ";" << plan.operator_type << ";" 
                       << plan.execution_time << ";" << plan.exec_costs << ";" 
@@ -1712,7 +1722,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
                       << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
-                      << plan.hash_table_size << "\n";  // 写入计划信息
+                      << plan.hash_table_size << ";" << plan.jointype << ";" 
+                      << plan.stream_poll_time << ";" << plan.stream_data_copy_time << ";" << "\n";  // 写入计划信息
         }             
 
         plan_file.close();
@@ -1927,8 +1938,101 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     }
 }
 
-void get_hash_plan_info(knl_plan_info_context& plan_info, VecHashJoinState *hashjoinstate){
-    // plan_info.hash_table_size = hashjoinstate->hj_HashTable->nbuckets;
+void get_join_plan_info(knl_plan_info_context &plan_info, Join *joinplan)
+{
+    switch ((joinplan)->jointype) {
+        case JOIN_INNER:
+            plan_info.jointype =  "Inner";
+            break;
+        case JOIN_LEFT:
+            plan_info.jointype = "Left";
+            break;
+        case JOIN_FULL:
+            plan_info.jointype = "Full";
+            break;
+        case JOIN_RIGHT:
+            plan_info.jointype = "Right";
+            break;
+        case JOIN_SEMI:
+            plan_info.jointype = "Semi";
+            break;
+        case JOIN_ANTI:
+            plan_info.jointype = "Anti";
+            break;
+        case JOIN_RIGHT_SEMI:
+            plan_info.jointype = "Right Semi";
+            break;
+        case JOIN_RIGHT_ANTI:
+            plan_info.jointype = "Right Anti";
+            break;
+        case JOIN_LEFT_ANTI_FULL:
+            plan_info.jointype = "Left Anti Full";
+            break;
+        case JOIN_RIGHT_ANTI_FULL:
+            plan_info.jointype = "Right Anti Full";
+            break;
+    }
+}
+
+static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream)
+{
+    Instrumentation *instr = NULL;
+    Plan *plan = (Plan *)stream;
+    long spacePeakKb = 0;
+    double data_copy_time = 0;
+    double poll_time = 0;
+    int count = 0;
+    double deserialize_time;
+    if (u_sess->instr_cxt.global_instr) {
+        int dop = ((Plan *)stream)->parallel_enabled ? u_sess->opt_cxt.query_dop : 1;
+        for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
+            char *node_name = NULL;
+            if (!IS_SPQ_RUNNING) {
+                node_name = g_instance.exec_cxt.nodeName;
+            } else {
+                node_name = (char *)palloc0(SPQNODENAMELEN);
+                sprintf(node_name, "%d", i);
+            }
+            for (int j = 0; j < dop; j++) {
+                instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, plan->plan_node_id, j);
+                if (instr == NULL)
+                    continue;
+                poll_time += instr->network_perfdata.total_poll_time;
+                data_copy_time += instr->network_perfdata.total_copy_time;
+                count++;
+            }
+        }
+        plan_info.stream_poll_time = poll_time/count;
+        plan_info.stream_data_copy_time = data_copy_time/count;
+    }
+}
+
+static int ExtractParamIndex(const std::string &filter)
+{
+    size_t pos = filter.find("$");
+    if (pos != std::string::npos) {
+        // 找到 $，然后获取后面的数字
+        std::string param_index_str = filter.substr(pos + 1);  // 截取 $ 后面的部分
+        int param_index = -1;
+        std::istringstream(param_index_str) >> param_index;  // 转换为整数
+        return param_index;
+    }
+    return -1;  // 如果没有找到 $，返回 -1 表示无效
+}
+
+static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info)
+{
+    for (const auto &subpair : query_info->SubPlans) {
+        // 假设 $0 的数字是通过某种方式提取的
+        int param_index = ExtractParamIndex(subpair.second);
+
+        for (auto &plan_entry : query_info->Plans) {
+            std::string filter = plan_entry.second.filter;
+            if (!filter.empty() && filter.find("$" + std::to_string(param_index)) != std::string::npos) {
+                plan_entry.second.child_plan_ids.push_back(subpair.first);
+            }
+        }
+    }
 }
 
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
@@ -2067,6 +2171,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             NestLoop *nestLoop = (NestLoop *)plan;
             plan_info.join_names = get_upper_qual(((NestLoop *)plan)->join.joinqual, planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
+            get_join_plan_info(plan_info, (Join *)plan);
         }break;
         case T_VecMergeJoin:
         case T_MergeJoin:
@@ -2074,12 +2179,14 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             MergeJoin *mergeJoin = (MergeJoin *)plan;
             plan_info.join_names = get_upper_qual(mergeJoin->mergeclauses, planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
+            get_join_plan_info(plan_info, (Join *)plan);
         }break;
         case T_HashJoin: {
             {
                 HashJoin *hashjoin = (VecHashJoin *)plan;
                 plan_info.join_names = get_upper_qual(hashjoin->hashclauses, planstate, ancestors, rtable);
                 plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
+                get_join_plan_info(plan_info, (Join *)plan);
             }
             break;
         }
@@ -2089,7 +2196,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.join_names = get_upper_qual(hashjoin->hashclauses,  planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
             plan_info.hash_table_size = hashjoin->total_mem_size;
-            get_hash_plan_info(plan_info, (VecHashJoinState *)planstate);
+            get_join_plan_info(plan_info, (Join *)plan);
         }break;
         case T_SetOp:
         case T_VecSetOp:
@@ -2100,8 +2207,11 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_VecAgg:
         case T_Agg: {
             get_agg_plan_info(plan_info, (AggState *)planstate);
-            break;
-        }
+        }break;
+        case T_VecStream:
+        {
+            getStreaminfo(plan_info, (Stream *)plan);
+        }break;
         default:
             break;
     }
@@ -2186,6 +2296,10 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan_info.dop = plan->dop;
     query_info->Plans.insert({query_info->operator_num, plan_info});
     query_info->operator_num++;
+    if (plan_name && (strstr(plan_name, "InitPlan") != NULL || strstr(plan_name, "SubPlan") != NULL) ) {
+        // 将 InitPlan 存储到 InitPlans 中
+        query_info->SubPlans.insert({plan->map_id, plan_name});
+    }
 
 runnext:
 
@@ -2212,8 +2326,7 @@ runnext:
             if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
                 continue;
             }
-            if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-            query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
+
             CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
         }
     }
@@ -2261,6 +2374,7 @@ runnext:
         } break;
         case T_BitmapAnd: {
             CollectMemberNodes(query_info, rtable, ((BitmapAnd *)plan)->bitmapplans,
+    //     char *objectname = rte->relname;
                                ((BitmapAndState *)planstate)->bitmapplans, ancestors, plan->plan_node_id);
         } break;
         case T_BitmapOr: {
@@ -2314,8 +2428,6 @@ runnext:
             if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
                 continue;
             }
-            if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-                query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
         }
     }
@@ -2337,7 +2449,6 @@ runnext:
 
     //     /* Step 3: Set object_type for plan table. */
     //     RangeTblEntry *rte = (RangeTblEntry *)llast(rtable);
-    //     char *objectname = rte->relname;
     //     const char *object_type = "REMOTE_QUERY";
 
     //     /* Step 4: Set projection for plan table. */

@@ -3011,6 +3011,7 @@ typedef struct knl_u_ndp_context {
 typedef struct knl_plan_info_context{
     int query_id;
     int plan_id;
+    bool is_visit;
     int dop;
     NodeTag type;
     std::string encoding;
@@ -3032,6 +3033,7 @@ typedef struct knl_plan_info_context{
     int actural_width;
     int l_input_rows;
     int r_input_rows;
+    std::string jointype;
     int actural_rows;
     int nloops;
     double hash_table_size;
@@ -3042,6 +3044,8 @@ typedef struct knl_plan_info_context{
     int query_dop;
     double agg_build_time;
     double agg_hash_time;
+    double stream_data_copy_time;
+    double stream_poll_time;
     std::string table_names;
     std::string index_names;
     std::string join_names;
@@ -3073,6 +3077,7 @@ typedef struct knl_query_info_context{
     bool is_user_sql;
     std::string table_names;
     std::unordered_map<int,knl_plan_info_context> Plans;
+    std::unordered_map<int,std::string> SubPlans;
 } knl_query_info_context;
 
 typedef struct knl_session_context {
