@@ -1708,7 +1708,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "actural_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
-                      << "agg_col;agg_width;build_time;hash_time;hash_table_size;jointype"  
+                      << "agg_col;agg_width;build_time;hash_time;hash_table_size;jointype;"  
                       << "stream_poll_time;stream_data_copy_time\n";
         }
         for (const auto& pair : query_info->Plans) {
@@ -1723,7 +1723,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
                       << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
                       << plan.hash_table_size << ";" << plan.jointype << ";" 
-                      << plan.stream_poll_time << ";" << plan.stream_data_copy_time << ";" << "\n";  // 写入计划信息
+                      << plan.stream_poll_time << ";" << plan.stream_data_copy_time << "\n";  // 写入计划信息
         }             
 
         plan_file.close();
