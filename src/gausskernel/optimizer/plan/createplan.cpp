@@ -5014,6 +5014,7 @@ static HashJoin* create_hashjoin_plan(PlannerInfo* root, HashPath* best_path, Pl
     }
 
     join_plan->total_mem_size = best_path->total_mem_size;
+    join_plan->is_left_table = best_path->is_left_table;
 
     return join_plan;
 }

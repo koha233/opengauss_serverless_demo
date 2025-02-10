@@ -3024,9 +3024,6 @@ typedef struct knl_plan_info_context{
     double start_up_costs;
     double exec_costs;
     int instance_mem;
-    long ex_cycles_per_row;
-    long ex_cycles;
-    long incCycles;
     double io_time;
     int estimate_rows;
     int estimate_width;
@@ -3046,6 +3043,9 @@ typedef struct knl_plan_info_context{
     double agg_hash_time;
     double stream_data_copy_time;
     double stream_poll_time;
+    bool is_left_hash_table;
+    int up_dop;
+    int down_dop;
     std::string table_names;
     std::string index_names;
     std::string join_names;

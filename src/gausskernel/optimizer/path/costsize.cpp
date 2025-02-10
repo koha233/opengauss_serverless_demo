@@ -4544,14 +4544,22 @@ void final_cost_hashjoin(PlannerInfo* root, HashPath* path, JoinCostWorkspace* w
         MemoryContextDelete(ExtendedStat);
     }
     /* 假设每个元组的大小 */
-    double tuple_size = inner_path->pathtarget->width;  // 单个元组占用内存大小，单位：字节
-    double hash_val_size = 8;
+    double hash_val_size = 12;
+    double left_tuple_size = inner_path->pathtarget->width + hash_val_size;  // 单个元组占用内存大小，单位：字节
+    double right_tuple_size = outer_path->pathtarget->width + hash_val_size;
 
 
     /* 计算哈希表总大小 */
-    double total_memory = inner_path_rows * tuple_size + virtualbuckets * hash_val_size;
-
-    path->total_mem_size = total_memory / 1024;
+    double total_memory = 0;
+    if(outer_path_rows * right_tuple_size < inner_path_rows * left_tuple_size) {
+        total_memory = outer_path_rows * right_tuple_size;
+        path->is_left_table  = false;
+    }
+    else{
+        total_memory = inner_path_rows * left_tuple_size;
+        path->is_left_table  = true;
+    }
+    path->total_mem_size = total_memory / 1024 * dop;
 }
 
 /*

@@ -1165,6 +1165,7 @@ typedef struct HashJoin {
     bool transferFilterFlag;
     bool rebuildHashTable;
     bool isSonicHash;
+    bool is_left_table;
     OpMemInfo mem_info; /* Memory info for inner hash table */
     double joinRows;
     List* hash_collations;

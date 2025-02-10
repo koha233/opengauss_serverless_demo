@@ -12,6 +12,7 @@
  *
  * -------------------------------------------------------------------------
  */
+#include <regex>
 #include "onnxruntime_cxx_api.h"
 #include "postgres.h"
 #include "knl/knl_variable.h"
@@ -80,6 +81,7 @@
 #include "pgxc/pgxc.h"
 #endif
 #include "db4ai/aifuncs.h"
+
 
 /* Thread local variables for plan_table. */
 THR_LOCAL bool OnlySelectFromPlanTable = false;
@@ -197,7 +199,7 @@ static void show_on_duplicate_info(ModifyTableState *mtstate, ExplainState *es, 
 #ifndef PGXC
 static void show_modifytable_info(ModifyTableState *mtstate, ExplainState *es);
 #endif /* PGXC */
-static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans,
+static void CollectMemberNodes(knl_query_info_context *query_info, knl_plan_info_context& plan_info, List *rtable, const List *plans,
                                PlanState **planstates, List *ancestors, int parent_id);
 static void ExplainMemberNodes(const List *plans, PlanState **planstates, List *ancestors, ExplainState *es);
 static void ExplainSubPlans(List *plans, List *ancestors, const char *relationship, ExplainState *es);
@@ -1477,9 +1479,6 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.actural_rows = 0;
     plan_info.io_time = 0;
     plan_info.query_dop = query_info->dop;
-    plan_info.ex_cycles_per_row = 0;
-    plan_info.ex_cycles = 0;
-    plan_info.incCycles = 0;
     plan_info.estimate_width = 0;
     plan_info.actural_width = 0;
     plan_info.l_input_rows = 0;
@@ -1489,6 +1488,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.query_id = query_info->query_id;
     plan_info.agg_width = 0;
     plan_info.agg_col = 0;
+    plan_info.table_names = "none";
     plan_info.agg_build_time = 0;
     plan_info.agg_hash_time = 0;
     plan_info.start_up_time = 0;
@@ -1502,6 +1502,8 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.stream_data_copy_time = 0;
     plan_info.is_visit = false;
     plan_info.jointype = "none";
+    plan_info.up_dop = 0;
+    plan_info.down_dop = 0;
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1638,23 +1640,30 @@ void UpdateExecutionTimes(knl_query_info_context* query_info) {
     }
 }
 
-void Reset_Input_rows(knl_query_info_context* query_info, Plan* plan){
+void Reset_Input_rows(knl_query_info_context *query_info, Plan *plan)
+{
     if (plan == nullptr) {
-        return; // 空节点直接返回
+        return;  // 空节点直接返回
     }
     // 递归设置左子树
     if (plan->lefttree != nullptr) {
         Reset_Input_rows(query_info, plan->lefttree);
         query_info->Plans[plan->map_id].l_input_rows = query_info->Plans[plan->lefttree->map_id].actural_rows;
-        if(nodeTag(plan) == T_VecHashJoin || nodeTag(plan) == T_HashJoin){
-            query_info->Plans[plan->map_id].hash_table_size *= double(query_info->Plans[plan->map_id].l_input_rows) / plan->lefttree->plan_rows;
-        }
     }
 
     // 递归设置右子树
     if (plan->righttree != nullptr) {
         Reset_Input_rows(query_info, plan->righttree);
         query_info->Plans[plan->map_id].r_input_rows = query_info->Plans[plan->righttree->map_id].actural_rows;
+    }
+    if (nodeTag(plan) == T_VecHashJoin || nodeTag(plan) == T_HashJoin) {
+        if (!((HashJoin *)plan)->is_left_table)
+            query_info->Plans[plan->map_id].hash_table_size *=
+                double(query_info->Plans[plan->map_id].r_input_rows) / plan->righttree->plan_rows;
+        else {
+            query_info->Plans[plan->map_id].hash_table_size *=
+                double(query_info->Plans[plan->map_id].l_input_rows) / plan->lefttree->plan_rows;
+        }
     }
 }
 
@@ -1685,7 +1694,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                        << "process_used_mem;estimate_work_mem;cstore_buffers;instance_mem;"
                        << "max_dynamic_memory;dynamic_startup_memory;init_used_memory;dynamic_peak_memory;other_memory;"
                        << "io_time;cpu_time;total_costs;"
-                       << "operator_num;table_names;query_string\n";  // 写入表头
+                       << "operator_num;table_names;query_string;\n";  // 写入表头
         }
         // 更新 query_id 计数器
         UpdateQueryIdCounter(counter_file_path, query_id + 1);
@@ -1709,11 +1718,19 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
                       << "agg_col;agg_width;build_time;hash_time;hash_table_size;jointype;"  
-                      << "stream_poll_time;stream_data_copy_time\n";
+                      << "stream_poll_time;stream_data_copy_time;up_dop;down_dop;"
+                      << "child_plan\n";
         }
         for (const auto& pair : query_info->Plans) {
             auto& plan_id = pair.first;
             auto& plan = pair.second;
+            std::string child_plan;
+            if (!plan.child_plan_ids.empty()) {
+                for (const auto &ids : plan.child_plan_ids) {
+                    child_plan += std::to_string(ids) + ",";
+                }
+                child_plan.pop_back();
+            }
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
                       << plan.query_dop << ";" << plan.operator_type << ";" 
                       << plan.execution_time << ";" << plan.exec_costs << ";" 
@@ -1723,7 +1740,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
                       << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
                       << plan.hash_table_size << ";" << plan.jointype << ";" 
-                      << plan.stream_poll_time << ";" << plan.stream_data_copy_time << "\n";  // 写入计划信息
+                      << plan.stream_poll_time << ";" << plan.stream_data_copy_time  << ";"  << plan.up_dop << ";" << plan.down_dop << ";"
+                      << child_plan << "\n";  // 写入计划信息
         }             
 
         plan_file.close();
@@ -1800,15 +1818,7 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
     int width_min = (int)(0x6FFFFFFF);
     int width_max = 0;
     bool executed = true;
-    uint64 proRows = 0;
     bool has_timing = false;
-    double incCycles = 0.0;
-    double exCycles = 0.0;
-    double outerCycles = 0.0;
-    double innerCycles = 0.0;
-    double ex_cyc_rows = 0.0;
-    uint64 outterRows = 0;
-    uint64 innerRows = 0;
     int count = 0;
     int i = 0;
     int j = 0;
@@ -1826,17 +1836,8 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                 if (threadinstr == NULL)
                     continue;
                 for (j = 0; j < dop; j++) {
-                    outerCycles = 0.0;
-                    innerCycles = 0.0;
                     instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
                     if (instr != NULL && instr->nloops > 0) {
-                        show_child_cpu_cycles_and_rows<true>(planstate, i, j, &outerCycles, &innerCycles, &outterRows,
-                                                             &innerRows);
-                        proRows = (long)(instr->ntuples);
-                        CalculateProcessedRows(planstate, i, j, &innerRows, &outterRows, &proRows);
-                        incCycles = instr->cpuusage.m_cycles;
-                        exCycles = incCycles - outerCycles - innerCycles;
-                        ex_cyc_rows = proRows != 0 ? (long)(exCycles / proRows) : 0;
                         rows += instr->ntuples;
                         exec_sec = 1000.0 * instr->total;
                         start_up_sec = 1000.0 * instr->startup;
@@ -1852,14 +1853,11 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
                             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
                         }
-                        plan_info.ex_cycles += (long)exCycles;
-                        plan_info.incCycles += (long)incCycles;
                         count++;
                     }
                 }
             }
         }
-        plan_info.ex_cycles_per_row = rows != 0 ? plan_info.ex_cycles / rows : 0;
         plan_info.actural_rows = rows;
         plan_info.nloops = instr->nloops;
         plan_info.total_time = exec_sec_max;
@@ -1879,15 +1877,6 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
         }
-        const CPUUsage *cpu_usage = &instr->cpuusage;
-        show_child_cpu_cycles_and_rows<false>(planstate, 0, 0, &outerCycles, &innerCycles, &outterRows, &innerRows);
-        incCycles = cpu_usage->m_cycles;
-        exCycles = incCycles - outerCycles - innerCycles;
-        proRows = (long)(instr->ntuples);
-        CalculateProcessedRows(planstate, 0, 0, &innerRows, &outterRows, &proRows);
-        plan_info.incCycles = incCycles;
-        plan_info.ex_cycles = exCycles;
-        plan_info.ex_cycles_per_row = proRows != 0 ? plan_info.ex_cycles / plan_info.actural_rows : 0;
     }
 }
 
@@ -1896,6 +1885,7 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     Agg *plan = (Agg *)aggstate->ss.ps.plan;
     plan_info.agg_width = plan->agg_width;
     plan_info.agg_col = plan->numCols;
+    plan_info.hash_table_size = plan->mem_info.maxMem * double(plan_info.actural_rows)/plan->numGroups;
     switch (((Agg *)plan)->aggstrategy) {
         case AGG_SORTED:
         case AGG_HASHED: 
@@ -1978,6 +1968,18 @@ static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream)
 {
     Instrumentation *instr = NULL;
     Plan *plan = (Plan *)stream;
+     // 正则表达式匹配字符串中的关键部分
+    std::regex pattern(R"(Vector Streaming\(type: ([\w\s]+) dop: (\d+)/(\d+)\))");
+    std::smatch matches;
+    if (std::regex_search(plan_info.operator_type, matches, pattern)) {
+        // 提取类型和dop的数字
+        std::string operator_type = matches[1];
+        int up_dop = std::stoi(matches[2]);
+        int down_dop = std::stoi(matches[3]);
+        plan_info.operator_type = "Vector Streaming " + operator_type;
+        plan_info.up_dop = up_dop;
+        plan_info.down_dop = down_dop;
+    }
     long spacePeakKb = 0;
     double data_copy_time = 0;
     double poll_time = 0;
@@ -2196,6 +2198,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.join_names = get_upper_qual(hashjoin->hashclauses,  planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
             plan_info.hash_table_size = hashjoin->total_mem_size;
+            plan_info.is_left_hash_table = hashjoin->is_left_table;
             get_join_plan_info(plan_info, (Join *)plan);
         }break;
         case T_SetOp:
@@ -2294,7 +2297,6 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
     plan->map_id = query_info->operator_num;
     plan_info.plan_id = query_info->operator_num;
     plan_info.dop = plan->dop;
-    query_info->Plans.insert({query_info->operator_num, plan_info});
     query_info->operator_num++;
     if (plan_name && (strstr(plan_name, "InitPlan") != NULL || strstr(plan_name, "SubPlan") != NULL) ) {
         // 将 InitPlan 存储到 InitPlans 中
@@ -2326,7 +2328,6 @@ runnext:
             if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
                 continue;
             }
-
             CollectPlanInfo(query_info, rtable, sps->planstate, ancestors, relationship, sp->plan_name);
         }
     }
@@ -2336,23 +2337,20 @@ runnext:
         CteScanState *css = (CteScanState *)planstate;
 
         if (css->cteplanstate) {
-            if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-            query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
+            plan_info.child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, css->cteplanstate, ancestors, "CTE Sub", NULL);
         }
     }
 
     /* lefttree */
     if (outerPlanState(planstate)) {
-        if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-        query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
+        plan_info.child_plan_ids.push_back(query_info->operator_num);
         CollectPlanInfo(query_info, rtable, outerPlanState(planstate), ancestors, "Outer", NULL);
     }
 
     /* righttree */
     if (innerPlanState(planstate)) {
-        if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-        query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
+        plan_info.child_plan_ids.push_back(query_info->operator_num);
         CollectPlanInfo(query_info, rtable, innerPlanState(planstate), ancestors, "Inner", NULL);
     }
 
@@ -2360,39 +2358,38 @@ runnext:
     switch (nodeTag(plan)) {
         case T_ModifyTable:
         case T_VecModifyTable: {
-            CollectMemberNodes(query_info, rtable, ((ModifyTable *)plan)->plans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((ModifyTable *)plan)->plans,
                                ((ModifyTableState *)planstate)->mt_plans, ancestors, plan->plan_node_id);
         } break;
         case T_VecAppend:
         case T_Append: {
-            CollectMemberNodes(query_info, rtable, ((Append *)plan)->appendplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((Append *)plan)->appendplans,
                                ((AppendState *)planstate)->appendplans, ancestors, plan->plan_node_id);
         } break;
         case T_MergeAppend: {
-            CollectMemberNodes(query_info, rtable, ((MergeAppend *)plan)->mergeplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((MergeAppend *)plan)->mergeplans,
                                ((MergeAppendState *)planstate)->mergeplans, ancestors, plan->plan_node_id);
         } break;
         case T_BitmapAnd: {
-            CollectMemberNodes(query_info, rtable, ((BitmapAnd *)plan)->bitmapplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((BitmapAnd *)plan)->bitmapplans,
     //     char *objectname = rte->relname;
                                ((BitmapAndState *)planstate)->bitmapplans, ancestors, plan->plan_node_id);
         } break;
         case T_BitmapOr: {
-            CollectMemberNodes(query_info, rtable, ((BitmapOr *)plan)->bitmapplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((BitmapOr *)plan)->bitmapplans,
                                ((BitmapOrState *)planstate)->bitmapplans, ancestors, plan->plan_node_id);
         } break;
         case T_CStoreIndexAnd: {
-            CollectMemberNodes(query_info, rtable, ((CStoreIndexAnd *)plan)->bitmapplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((CStoreIndexAnd *)plan)->bitmapplans,
                                ((BitmapAndState *)planstate)->bitmapplans, ancestors, plan->plan_node_id);
         } break;
         case T_CStoreIndexOr: {
-            CollectMemberNodes(query_info, rtable, ((CStoreIndexOr *)plan)->bitmapplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((CStoreIndexOr *)plan)->bitmapplans,
                                ((BitmapOrState *)planstate)->bitmapplans, ancestors, plan->plan_node_id);
         } break;
         case T_SubqueryScan:
         case T_VecSubqueryScan: {
-            if (query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-                query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
+            plan_info.child_plan_ids.push_back(query_info->operator_num);
             CollectPlanInfo(query_info, rtable, ((SubqueryScanState *)planstate)->subplan, ancestors, "Subquery", NULL);
         } break;
         case T_ExtensiblePlan: {
@@ -2402,14 +2399,13 @@ runnext:
 
             foreach (cell, epplanstate->extensible_ps)
             {
-                if(query_info->Plans.find(plan_info.plan_id) != query_info->Plans.end())
-                    query_info->Plans[plan_info.plan_id].child_plan_ids.push_back(query_info->operator_num);
+                plan_info.child_plan_ids.push_back(query_info->operator_num);
                 CollectPlanInfo(query_info, rtable, (PlanState *)lfirst(cell), ancestors, label, NULL);
             }
         } break;
 #ifdef USE_SPQ
         case T_Sequence:
-            CollectMemberNodes(query_info, rtable, ((Sequence *)plan)->subplans, ((SequenceState *)planstate)->subplans,
+            CollectMemberNodes(query_info, plan_info, rtable, ((Sequence *)plan)->subplans, ((SequenceState *)planstate)->subplans,
                                ancestors, plan_info.plan_id);
             break;
 #endif
@@ -2436,6 +2432,7 @@ runnext:
     if (haschildren) {
         ancestors = list_delete_first(ancestors);
     }
+    query_info->Plans.insert({plan_info.plan_id, plan_info});
 
     // /* Set info for explain plan. Note that we do not deal with query shipping except "explain plan for select for
     //  * update". */
@@ -9523,14 +9520,12 @@ static void ExplainMemberNodes(const List *plans, PlanState **planstates, List *
     es->from_dn = old_flag;
 }
 
-static void CollectMemberNodes(knl_query_info_context *query_info, List *rtable, const List *plans,
+static void CollectMemberNodes(knl_query_info_context *query_info, knl_plan_info_context& plan_info, List *rtable, const List *plans,
                                PlanState **planstates, List *ancestors, int parent_id)
 {
     int nplans = list_length(plans);
-    bool exist = (query_info->Plans.find(parent_id) != query_info->Plans.end());
     for (int j = 0; j < nplans; j++) {
-        if(exist)
-        query_info->Plans[parent_id].child_plan_ids.push_back(query_info->operator_num);
+        plan_info.child_plan_ids.push_back(query_info->operator_num);
         CollectPlanInfo(query_info, rtable, planstates[j], ancestors, "Member", NULL);
     }
 }

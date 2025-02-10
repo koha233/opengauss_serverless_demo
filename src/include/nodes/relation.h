@@ -1571,6 +1571,7 @@ typedef struct HashPath {
     OpMemInfo mem_info;     /* Mem info for hash table */
     double joinRows;
     double total_mem_size;
+    bool is_left_table;
 } HashPath;
 
 #ifdef PGXC
