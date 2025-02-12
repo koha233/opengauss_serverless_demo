@@ -1504,6 +1504,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.jointype = "none";
     plan_info.up_dop = 0;
     plan_info.down_dop = 0;
+    plan_info.disk_ratio = 0;
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1717,7 +1718,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "actural_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
-                      << "agg_col;agg_width;build_time;hash_time;hash_table_size;jointype;"  
+                      << "agg_col;agg_width;disk_ratio;build_time;hash_time;hash_table_size;jointype;"  
                       << "stream_poll_time;stream_data_copy_time;up_dop;down_dop;"
                       << "child_plan\n";
         }
@@ -1738,7 +1739,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
-                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
+                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.disk_ratio << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
                       << plan.hash_table_size << ";" << plan.jointype << ";" 
                       << plan.stream_poll_time << ";" << plan.stream_data_copy_time  << ";"  << plan.up_dop << ";" << plan.down_dop << ";"
                       << child_plan << "\n";  // 写入计划信息
@@ -1883,9 +1884,10 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
 void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
 {
     Agg *plan = (Agg *)aggstate->ss.ps.plan;
+    plan_info.disk_ratio = plan->disk_ratio;
     plan_info.agg_width = plan->agg_width;
     plan_info.agg_col = plan->numCols;
-    plan_info.hash_table_size = plan->mem_info.maxMem * double(plan_info.actural_rows)/plan->numGroups;
+    plan_info.hash_table_size = (plan->disk_ratio == 0) ? plan->mem_info.maxMem : plan->mem_info.minMem;
     switch (((Agg *)plan)->aggstrategy) {
         case AGG_SORTED:
         case AGG_HASHED: 

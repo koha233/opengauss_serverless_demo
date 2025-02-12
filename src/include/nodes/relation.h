@@ -1146,6 +1146,7 @@ typedef struct Path {
     List* distribute_keys; /* distribute key, Var list */
     char locator_type;
     RemoteQueryExecType exec_type;
+    double disk_ratio;
     Oid rangelistOid;
     int dop; /* degree of parallelism */
     /* pathkeys is a List of PathKey nodes; see above */

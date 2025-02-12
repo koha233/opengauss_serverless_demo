@@ -7953,6 +7953,7 @@ Agg* make_agg(PlannerInfo* root, List* tlist, List* qual, AggStrategy aggstrateg
     /* agg estimate cost has already include subplan's cost */
     plan->startup_cost = agg_path.startup_cost;
     plan->total_cost = agg_path.total_cost;
+    node->disk_ratio = agg_path.disk_ratio;
 
     /*
      * We will produce a single output tuple if not grouping, and a tuple per

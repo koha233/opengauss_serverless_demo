@@ -3030,6 +3030,7 @@ typedef struct knl_plan_info_context{
     int actural_width;
     int l_input_rows;
     int r_input_rows;
+    double disk_ratio;
     std::string jointype;
     int actural_rows;
     int nloops;

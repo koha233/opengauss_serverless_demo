@@ -2770,9 +2770,10 @@ void cost_agg(Path* path, PlannerInfo* root, AggStrategy aggstrategy, const AggC
         if (hash_table_size < 0)
             hash_table_size = (double)LONG_MAX;
         spill_disk = (hash_table_size > (double)u_sess->opt_cxt.op_work_mem);
-
+        path->disk_ratio = 0;
         if (spill_disk) {
             const double disk_ratio = 1 - u_sess->opt_cxt.op_work_mem / hash_table_size;
+            path->disk_ratio = disk_ratio;
             double disk_pages = ceil(page_size(input_tuples, input_width) * disk_ratio);
             double one_disk_io_cost = u_sess->attr.attr_sql.seq_page_cost * disk_pages;
             double disk_hash_cost = u_sess->attr.attr_sql.cpu_operator_cost * numGroupCols * input_tuples * disk_ratio;
@@ -4544,21 +4545,15 @@ void final_cost_hashjoin(PlannerInfo* root, HashPath* path, JoinCostWorkspace* w
         MemoryContextDelete(ExtendedStat);
     }
     /* 假设每个元组的大小 */
-    double hash_val_size = 12;
-    double left_tuple_size = inner_path->pathtarget->width + hash_val_size;  // 单个元组占用内存大小，单位：字节
-    double right_tuple_size = outer_path->pathtarget->width + hash_val_size;
+    double hash_val_size = 24;
+    // double left_tuple_size = inner_path->pathtarget->width + hash_val_size;  // 单个元组占用内存大小，单位：字节
+    double right_tuple_size = inner_path->pathtarget->width + hash_val_size;
 
 
     /* 计算哈希表总大小 */
     double total_memory = 0;
-    if(outer_path_rows * right_tuple_size < inner_path_rows * left_tuple_size) {
-        total_memory = outer_path_rows * right_tuple_size;
-        path->is_left_table  = false;
-    }
-    else{
-        total_memory = inner_path_rows * left_tuple_size;
-        path->is_left_table  = true;
-    }
+    total_memory = inner_path_rows * right_tuple_size;
+    path->is_left_table  = false;
     path->total_mem_size = total_memory / 1024 * dop;
 }
 
