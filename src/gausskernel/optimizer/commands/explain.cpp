@@ -2106,20 +2106,14 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             auto relid = ((Scan *)plan)->scanrelid;
             if (relid > 0) {
                 if (GetTargetRel(plan, relid, rtable, table_name, false)) {
-                    if (!plan_info.table_names.empty()) {
-                        plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
-                    }
-                    plan_info.table_names += table_name;
+                    plan_info.table_names = table_name;
                 }
             }
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
         } break;
         case T_IndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
-                if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
-                }
-                plan_info.table_names += table_name;
+                plan_info.table_names = table_name;
             }
             plan_info.index_names = get_scan_qual(((IndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
@@ -2129,10 +2123,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
 #endif
         case T_IndexOnlyScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
-                if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
-                }
-                plan_info.table_names += table_name;
+                plan_info.table_names = table_name;
             }
             plan_info.index_names = get_scan_qual(((IndexOnlyScan *)plan)->indexqual, planstate, ancestors, rtable);
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
@@ -2142,10 +2133,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         } break;
         case T_CStoreIndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
-                if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
-                }
-                plan_info.table_names += table_name;
+                plan_info.table_names = table_name;
             }
             plan_info.index_names = get_scan_qual(((CStoreIndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
@@ -2159,10 +2147,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             bool multiTarget = (list_length((List *)linitial(modifyplan->resultRelations)) > 1);
             Index rti = (Index)linitial_int((List *)linitial(modifyplan->resultRelations));
             if (GetTargetRel(plan, rti, rtable, table_name, multiTarget)) {
-                if (!plan_info.table_names.empty()) {
-                    plan_info.table_names += ",";  // 添加逗号和空格作为分隔符
-                }
-                plan_info.table_names += table_name;
+                plan_info.table_names = table_name;
             }
         } break;
         // case T_Material:
