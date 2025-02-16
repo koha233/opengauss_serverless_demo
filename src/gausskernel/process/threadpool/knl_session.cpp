@@ -1484,7 +1484,7 @@ static void knl_u_plan_info_init(knl_plan_info_context *plan_info_cxt)
     plan_info_cxt->start_up_costs = 0;
     plan_info_cxt->exec_costs = 0;
     plan_info_cxt->estimate_rows =0;
-    plan_info_cxt->actural_rows = 0;
+    plan_info_cxt->actual_rows = 0;
     plan_info_cxt->l_input_rows = 0;
     plan_info_cxt->r_input_rows = 0;
 }

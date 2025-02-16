@@ -3032,7 +3032,7 @@ typedef struct knl_plan_info_context{
     int r_input_rows;
     double disk_ratio;
     std::string jointype;
-    int actural_rows;
+    int actual_rows;
     int nloops;
     double hash_table_size;
     int predicate_cost;

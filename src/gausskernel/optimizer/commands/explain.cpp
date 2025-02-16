@@ -1477,7 +1477,7 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.exec_costs = 0;
     plan_info.total_time = 0;
     plan_info.estimate_rows = 0;
-    plan_info.actural_rows = 0;
+    plan_info.actual_rows = 0;
     plan_info.io_time = 0;
     plan_info.query_dop = query_info->dop;
     plan_info.estimate_width = 0;
@@ -1650,13 +1650,13 @@ void Reset_Input_rows(knl_query_info_context *query_info, Plan *plan)
     // 递归设置左子树
     if (plan->lefttree != nullptr) {
         Reset_Input_rows(query_info, plan->lefttree);
-        query_info->Plans[plan->map_id].l_input_rows = query_info->Plans[plan->lefttree->map_id].actural_rows;
+        query_info->Plans[plan->map_id].l_input_rows = query_info->Plans[plan->lefttree->map_id].actual_rows;
     }
 
     // 递归设置右子树
     if (plan->righttree != nullptr) {
         Reset_Input_rows(query_info, plan->righttree);
-        query_info->Plans[plan->map_id].r_input_rows = query_info->Plans[plan->righttree->map_id].actural_rows;
+        query_info->Plans[plan->map_id].r_input_rows = query_info->Plans[plan->righttree->map_id].actual_rows;
     }
     if (nodeTag(plan) == T_VecHashJoin || nodeTag(plan) == T_HashJoin) {
         if (!((HashJoin *)plan)->is_left_table)
@@ -1716,7 +1716,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         if (IsFileEmpty(plan_file)) {
             plan_file << "query_id;plan_id;dop;query_dop;operator_type;"
                       << "estimate_costs;estimate_rows;"
-                      << "actural_rows;l_input_rows;r_input_rows;nloops;"
+                      << "actual_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
                       << "agg_col;agg_width;disk_ratio;build_time;hash_time;hash_table_size;jointype;"  
@@ -1736,7 +1736,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
                       << plan.query_dop << ";" << plan.operator_type << ";" 
                       << plan.exec_costs << ";" 
-                      << plan.estimate_rows << ";" << plan.actural_rows << ";" 
+                      << plan.estimate_rows << ";" << plan.actual_rows << ";" 
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
@@ -1774,7 +1774,7 @@ std::string GenerateInfoSql(knl_query_info_context *query_info)
     //     "
     //         << plan.operator_type << ";" << plan.strategy << ";" << plan.execution_time << ";" <<
     //         plan.estimate_costs
-    //         << ";" << plan.io_time << ";" << plan.estimate_rows << ", " << plan.actural_rows << ", " <<
+    //         << ";" << plan.io_time << ";" << plan.estimate_rows << ", " << plan.actual_rows << ", " <<
     //         plan.peak_mem
     //         << ", " << plan.table_names << ")";
     //     first = false;
@@ -1860,14 +1860,14 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                 }
             }
         }
-        plan_info.actural_rows = rows;
+        plan_info.actual_rows = rows;
         plan_info.nloops = instr->nloops;
         plan_info.total_time = exec_sec_max;
         plan_info.actural_width = width_max;
         plan_info.start_up_time = start_up_sec_min;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
         instr = planstate->instrument;
-        plan_info.actural_rows = instr->ntuples;
+        plan_info.actual_rows = instr->ntuples;
         plan_info.nloops = instr->nloops;
         plan_info.total_time = 1000.0 * instr->total;
         plan_info.start_up_time = 1000.0 * instr->startup;
@@ -2189,7 +2189,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         } break;
         // case T_Material:
         // case T_VecMaterial:{
-        //     plan_info.actural_rows = plan_info.l_input_rows;
+        //     plan_info.actual_rows = plan_info.l_input_rows;
         // }
         case T_NestLoop:
         case T_VecNestLoop:
