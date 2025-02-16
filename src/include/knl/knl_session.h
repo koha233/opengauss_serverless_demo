@@ -3040,8 +3040,8 @@ typedef struct knl_plan_info_context{
     int agg_width;
     int agg_col;
     int query_dop;
-    double agg_build_time;
-    double agg_hash_time;
+    double hash_build_time;
+    double hash_probe_time;
     double stream_data_copy_time;
     double stream_poll_time;
     bool is_left_hash_table;

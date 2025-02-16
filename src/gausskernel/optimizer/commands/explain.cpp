@@ -13,7 +13,7 @@
  * -------------------------------------------------------------------------
  */
 #include <regex>
-#include "onnxruntime_cxx_api.h"
+// #include "onnxruntime_cxx_api.h"
 #include "postgres.h"
 #include "knl/knl_variable.h"
 
@@ -285,6 +285,7 @@ static void show_unique_check_info(PlanState *planstate, ExplainState *es);
 static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, StringInfo str, bool is_pretty);
 static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream);
 static void get_datanode_info(knl_plan_info_context &query_info, PlanState *planstate);
+static void get_hashjoin_info(knl_plan_info_context &query_info, VecHashJoinState *vectorhashjoinstate);
 static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info);
 static int ExtractParamIndex(const std::string &filter);
 /*
@@ -1489,8 +1490,8 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.agg_width = 0;
     plan_info.agg_col = 0;
     plan_info.table_names = "none";
-    plan_info.agg_build_time = 0;
-    plan_info.agg_hash_time = 0;
+    plan_info.hash_probe_time = 0;
+    plan_info.hash_build_time = 0;
     plan_info.start_up_time = 0;
     plan_info.nloops = 0;
     plan_info.hash_table_size = 0;
@@ -1625,10 +1626,10 @@ void UpdateExecutionTimesRecursive(std::unordered_map<int, knl_plan_info_context
         }
         default:
             // 更新当前节点的 execution_time
-            if (plan.type != NodeTag::T_VecStream) {
-                plan.execution_time = plan.total_time - max_child_execution_time;
+            if (plan.type == NodeTag::T_VecStream) {
+                plan.execution_time = plan.stream_data_copy_time;
             } else {
-                plan.execution_time = plan.total_time - plan.start_up_time;
+                plan.execution_time = plan.total_time - max_child_execution_time;
             }
             break;
     }
@@ -1714,7 +1715,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     if (plan_file.is_open()) {
         if (IsFileEmpty(plan_file)) {
             plan_file << "query_id;plan_id;dop;query_dop;operator_type;"
-                      << "execution_time;estimate_costs;estimate_rows;"
+                      << "estimate_costs;estimate_rows;"
                       << "actural_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
@@ -1734,12 +1735,12 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             }
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
                       << plan.query_dop << ";" << plan.operator_type << ";" 
-                      << plan.execution_time << ";" << plan.exec_costs << ";" 
+                      << plan.exec_costs << ";" 
                       << plan.estimate_rows << ";" << plan.actural_rows << ";" 
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
-                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.disk_ratio << ";" << plan.agg_build_time << ";" << plan.agg_hash_time << ";"  // 写入计划信息
+                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.disk_ratio << ";" << plan.hash_build_time << ";" << plan.hash_probe_time << ";"  // 写入计划信息
                       << plan.hash_table_size << ";" << plan.jointype << ";" 
                       << plan.stream_poll_time << ";" << plan.stream_data_copy_time  << ";"  << plan.up_dop << ";" << plan.down_dop << ";"
                       << child_plan << "\n";  // 写入计划信息
@@ -1912,8 +1913,8 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
                         instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
                         if (instr != NULL && instr->nloops > 0) {
                             if (max_time < instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time) {
-                                plan_info.agg_build_time = instr->sorthashinfo.hashbuild_time * 1000;
-                                plan_info.agg_hash_time = instr->sorthashinfo.hashagg_time * 1000;
+                                plan_info.hash_build_time = instr->sorthashinfo.hashbuild_time * 1000;
+                                plan_info.hash_probe_time = instr->sorthashinfo.hashagg_time * 1000;
                                 max_time = instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time;
                             }
                         }
@@ -1921,12 +1922,48 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
                 }
             } else if (planstate->instrument && planstate->instrument->nloops > 0) {
                 Instrumentation *instrument = planstate->instrument;
-                plan_info.agg_build_time = instrument->sorthashinfo.hashbuild_time * 1000;
-                plan_info.agg_hash_time = instrument->sorthashinfo.hashagg_time * 1000;
+                plan_info.hash_build_time = instrument->sorthashinfo.hashbuild_time * 1000;
+                plan_info.hash_probe_time = instrument->sorthashinfo.hashagg_time * 1000;
             }
         } break;
         default:
             break;
+    }
+}
+
+void get_hashjoin_info(knl_plan_info_context &plan_info, VecHashJoinState *vectorhashjoinstate)
+{
+    PlanState *planstate = (PlanState *)vectorhashjoinstate;
+    if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr) {
+        Instrumentation *instr = NULL;
+        double max_time = 0;
+        int datanode_size = 0;
+        int i = 0;
+        int j = 0;
+        int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
+
+        if (u_sess->instr_cxt.global_instr)
+            datanode_size = u_sess->instr_cxt.global_instr->getInstruNodeNum();
+        for (i = 0; i < datanode_size; i++) {
+            ThreadInstrumentation *threadinstr =
+                u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
+            if (threadinstr == NULL)
+                continue;
+            for (j = 0; j < dop; j++) {
+                instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
+                if (instr != NULL && instr->nloops > 0) {
+                    if (max_time < instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time) {
+                        plan_info.hash_build_time = instr->sorthashinfo.hashbuild_time * 1000;
+                        plan_info.hash_probe_time = instr->sorthashinfo.hashagg_time * 1000;
+                        max_time = instr->sorthashinfo.hashbuild_time + instr->sorthashinfo.hashagg_time;
+                    }
+                }
+            }
+        }
+    } else if (planstate->instrument && planstate->instrument->nloops > 0) {
+        Instrumentation *instrument = planstate->instrument;
+        plan_info.hash_build_time = instrument->sorthashinfo.hashbuild_time * 1000;
+        plan_info.hash_probe_time = instrument->sorthashinfo.hashagg_time * 1000;
     }
 }
 
@@ -2187,6 +2224,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.hash_table_size = hashjoin->total_mem_size;
             plan_info.is_left_hash_table = hashjoin->is_left_table;
             get_join_plan_info(plan_info, (Join *)plan);
+            get_hashjoin_info(plan_info, (VecHashJoinState *)planstate);
         }break;
         case T_SetOp:
         case T_VecSetOp:
