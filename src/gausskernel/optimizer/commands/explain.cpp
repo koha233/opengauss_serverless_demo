@@ -288,6 +288,7 @@ static void get_datanode_info(knl_plan_info_context &query_info, PlanState *plan
 static void get_hashjoin_info(knl_plan_info_context &query_info, VecHashJoinState *vectorhashjoinstate);
 static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info);
 static int ExtractParamIndex(const std::string &filter);
+static void get_stream_send_time(knl_plan_info_context& plan_info, const PlanState *planstate);
 /*
  * ExplainQuery -
  *	  execute an EXPLAIN command
@@ -1493,6 +1494,8 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.hash_probe_time = 0;
     plan_info.hash_build_time = 0;
     plan_info.start_up_time = 0;
+    plan_info.stream_data_send_time = 0;
+    plan_info.stream_quota_time = 0;
     plan_info.nloops = 0;
     plan_info.hash_table_size = 0;
     plan_info.filter = "";
@@ -1627,7 +1630,7 @@ void UpdateExecutionTimesRecursive(std::unordered_map<int, knl_plan_info_context
         default:
             // 更新当前节点的 execution_time
             if (plan.type == NodeTag::T_VecStream) {
-                plan.execution_time = plan.total_time - Plans[plan.child_plan_ids[0]].total_time;
+                plan.execution_time = plan.stream_data_copy_time + Plans[plan.child_plan_ids[0]].stream_data_send_time - Plans[plan.child_plan_ids[0]].stream_quota_time;
             } 
             else if(plan.type == NodeTag::T_VecHashJoin)
             {
@@ -1731,6 +1734,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
                       << "agg_col;agg_width;disk_ratio;build_time;hash_time;hash_table_size;jointype;"  
+                      << "stream_data_send_time;stream_quota_time;"
                       << "stream_poll_time;stream_data_copy_time;up_dop;down_dop;"
                       << "child_plan\n";
         }
@@ -1753,6 +1757,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
                       << plan.agg_col << ";" << plan.agg_width << ";" << plan.disk_ratio << ";" << plan.hash_build_time << ";" << plan.hash_probe_time << ";"  // 写入计划信息
                       << plan.hash_table_size << ";" << plan.jointype << ";" 
+                      << plan.stream_data_send_time << ";" << plan.stream_quota_time << ";"
                       << plan.stream_poll_time << ";" << plan.stream_data_copy_time  << ";"  << plan.up_dop << ";" << plan.down_dop << ";"
                       << child_plan << "\n";  // 写入计划信息
         }             
@@ -2059,6 +2064,39 @@ static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream)
     }
 }
 
+static void get_stream_send_time(knl_plan_info_context &plan_info, const PlanState *planstate)
+{
+    bool isSend = false;
+    int dop = planstate->plan->parallel_enabled ? planstate->plan->dop : 1;
+
+    /* is current plan node is the top node */
+    isSend = u_sess->instr_cxt.global_instr->IsSend(0, planstate->plan->plan_node_id, 0);
+    if (isSend == false) {
+        return;
+    }
+    double send_time = 0;
+    double wait_quota_time = 0;
+    double copy_time = 0;
+
+    for (int i = 0; i < u_sess->instr_cxt.global_instr->getInstruNodeNum(); i++) {
+        ThreadInstrumentation *threadinstr =
+            u_sess->instr_cxt.global_instr->getThreadInstrumentation(i, planstate->plan->plan_node_id, 0);
+        if (threadinstr == NULL)
+            continue;
+        for (int j = 0; j < dop; j++) {
+            Instrumentation *instr = u_sess->instr_cxt.global_instr->getInstrSlot(i, planstate->plan->plan_node_id, j);
+            if (instr != NULL && instr->stream_senddata.loops == true) {
+                send_time = Max(instr->stream_senddata.total_send_time, send_time);
+                wait_quota_time = Max(instr->stream_senddata.total_wait_quota_time, wait_quota_time);
+                copy_time = Max(instr->stream_senddata.total_copy_time, copy_time);
+            }
+        }
+    }
+    plan_info.stream_data_send_time = send_time;
+    plan_info.stream_quota_time = wait_quota_time;
+    plan_info.stream_data_copy_time = copy_time;
+}
+
 static int ExtractParamIndex(const std::string &filter)
 {
     size_t pos = filter.find("$");
@@ -2125,6 +2163,10 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         Instrumentation *instrument = planstate->instrument;
         InstrEndLoop(planstate->instrument);
         get_datanode_info(plan_info, planstate);
+        if (planstate->plan->plan_node_id > 0 && u_sess->instr_cxt.global_instr &&
+        u_sess->instr_cxt.global_instr->isFromDataNode(planstate->plan->plan_node_id)) {
+        get_stream_send_time(plan_info, planstate);
+        }
         query_info->operator_mem += plan_info.peak_mem;
     }
     plan_info.type = nodeTag(plan);

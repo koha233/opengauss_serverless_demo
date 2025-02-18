@@ -3044,6 +3044,8 @@ typedef struct knl_plan_info_context{
     double hash_probe_time;
     double stream_data_copy_time;
     double stream_poll_time;
+    double stream_data_send_time;
+    double stream_quota_time;
     bool is_left_hash_table;
     int up_dop;
     int down_dop;
