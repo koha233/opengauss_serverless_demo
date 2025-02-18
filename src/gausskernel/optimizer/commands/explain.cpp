@@ -1627,8 +1627,18 @@ void UpdateExecutionTimesRecursive(std::unordered_map<int, knl_plan_info_context
         default:
             // 更新当前节点的 execution_time
             if (plan.type == NodeTag::T_VecStream) {
-                plan.execution_time = plan.stream_data_copy_time;
-            } else {
+                plan.execution_time = plan.total_time - Plans[plan.child_plan_ids[0]].total_time;
+            } 
+            else if(plan.type == NodeTag::T_VecHashJoin)
+            {
+                if(plan.total_time < plan.hash_build_time + plan.hash_probe_time)
+                plan.total_time = plan.hash_build_time + plan.hash_probe_time;
+                plan.execution_time = plan.total_time - max_child_execution_time;
+                if(plan.execution_time < plan.hash_build_time){
+                    plan.execution_time = plan.hash_build_time;
+                }
+            }
+            else{
                 plan.execution_time = plan.total_time - max_child_execution_time;
             }
             break;
@@ -1715,6 +1725,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     if (plan_file.is_open()) {
         if (IsFileEmpty(plan_file)) {
             plan_file << "query_id;plan_id;dop;query_dop;operator_type;"
+                      << "execution_time;total_time;start_time;"
                       << "estimate_costs;estimate_rows;"
                       << "actual_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
@@ -1735,8 +1746,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
             }
             plan_file << query_id << ";" << plan_id << ";" << plan.dop << ";" 
                       << plan.query_dop << ";" << plan.operator_type << ";" 
-                      << plan.exec_costs << ";" 
-                      << plan.estimate_rows << ";" << plan.actual_rows << ";" 
+                      << plan.execution_time << ";" << plan.total_time << ";" << plan.start_up_time << ";"  
+                      << plan.exec_costs << ";" << plan.estimate_rows << ";" << plan.actual_rows << ";" 
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
