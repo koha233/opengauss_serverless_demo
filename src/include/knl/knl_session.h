@@ -3023,6 +3023,7 @@ typedef struct knl_plan_info_context{
     double execution_time;
     double start_up_costs;
     double exec_costs;
+    double agg_groups;
     int instance_mem;
     double io_time;
     int estimate_rows;
@@ -3040,6 +3041,7 @@ typedef struct knl_plan_info_context{
     int agg_width;
     int agg_col;
     int query_dop;
+    int hash_width;
     double hash_build_time;
     double hash_probe_time;
     double stream_data_copy_time;

@@ -7860,6 +7860,7 @@ Agg* make_agg(PlannerInfo* root, List* tlist, List* qual, AggStrategy aggstrateg
     bool reduce_plan = false;
     List* local_qual = NIL;
     double plan_rows;
+    node->is_redistribute = false;
 
     errno_t rc = EOK;
     rc = memset_s(&agg_path, sizeof(Path), 0, sizeof(Path));

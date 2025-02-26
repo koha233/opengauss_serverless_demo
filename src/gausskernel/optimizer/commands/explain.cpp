@@ -1509,6 +1509,8 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.up_dop = 0;
     plan_info.down_dop = 0;
     plan_info.disk_ratio = 0;
+    plan_info.agg_groups = 0;
+    plan_info.hash_width = 0;
 }
 
 void CollectQueryInfo(knl_query_info_context *query_info, QueryDesc *queryDesc)
@@ -1680,6 +1682,17 @@ void Reset_Input_rows(knl_query_info_context *query_info, Plan *plan)
                 double(query_info->Plans[plan->map_id].l_input_rows) / plan->lefttree->plan_rows;
         }
     }
+    if (nodeTag(plan) == T_VecAgg || nodeTag(plan) == T_Agg) {
+        Agg *agg = (Agg *)plan;
+        if(agg->aggstrategy == AGG_HASHED){
+            if(agg->is_redistribute){
+            query_info->Plans[plan->map_id].hash_table_size = Max(query_info->Plans[plan->map_id].hash_table_size, 
+            query_info->Plans[plan->lefttree->lefttree->map_id].hash_table_size); 
+            query_info->Plans[plan->map_id].agg_groups = Max(query_info->Plans[plan->map_id].agg_groups,
+            query_info->Plans[plan->lefttree->lefttree->map_id].agg_groups);
+        }
+        }
+    }
 }
 
 void FixExecutionTimes(knl_query_info_context* query_info){
@@ -1733,7 +1746,8 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "actual_rows;l_input_rows;r_input_rows;nloops;"
                       << "peak_mem;cstore_buffers;instance_mem;width;"
                       << "table_names;index_names;filter;join_names;predicate_cost;" 
-                      << "agg_col;agg_width;disk_ratio;build_time;hash_time;hash_table_size;jointype;"  
+                      << "agg_col;agg_width;disk_ratio;agg_groups;"
+                      << "build_time;hash_time;hash_table_size;jointype;hash_width;"  
                       << "stream_data_send_time;stream_quota_time;"
                       << "stream_poll_time;stream_data_copy_time;up_dop;down_dop;"
                       << "child_plan\n";
@@ -1755,8 +1769,9 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.l_input_rows << ";" << plan.r_input_rows << ";" << plan.nloops<< ";" 
                       << plan.peak_mem << ";" << plan.cstore_buffers << ";"  << plan.instance_mem << ";" << plan.estimate_width << ";" 
                       << plan.table_names << ";" << plan.index_names << ";" << plan.filter << ";" << plan.join_names << ";" << plan.predicate_cost << ";"
-                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.disk_ratio << ";" << plan.hash_build_time << ";" << plan.hash_probe_time << ";"  // 写入计划信息
-                      << plan.hash_table_size << ";" << plan.jointype << ";" 
+                      << plan.agg_col << ";" << plan.agg_width << ";" << plan.disk_ratio << ";" << plan.agg_groups << ";"
+                      << plan.hash_build_time << ";" << plan.hash_probe_time << ";"  // 写入计划信息
+                      << plan.hash_table_size << ";" << plan.jointype << ";" << plan.hash_width << ";" 
                       << plan.stream_data_send_time << ";" << plan.stream_quota_time << ";"
                       << plan.stream_poll_time << ";" << plan.stream_data_copy_time  << ";"  << plan.up_dop << ";" << plan.down_dop << ";"
                       << child_plan << "\n";  // 写入计划信息
@@ -1905,6 +1920,11 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     plan_info.agg_width = plan->agg_width;
     plan_info.agg_col = plan->numCols;
     plan_info.hash_table_size = (plan->disk_ratio == 0) ? plan->mem_info.maxMem : plan->mem_info.minMem;
+    plan_info.agg_groups = plan->numGroups;
+    if(plan_info.agg_groups < plan_info.actual_rows){
+        plan_info.hash_table_size = double(plan_info.actual_rows) / plan_info.agg_groups * plan_info.hash_table_size; 
+        plan_info.agg_groups = plan_info.actual_rows;
+    }
     switch (((Agg *)plan)->aggstrategy) {
         case AGG_SORTED:
         case AGG_HASHED: 
@@ -1981,6 +2001,7 @@ void get_hashjoin_info(knl_plan_info_context &plan_info, VecHashJoinState *vecto
         plan_info.hash_build_time = instrument->sorthashinfo.hashbuild_time * 1000;
         plan_info.hash_probe_time = instrument->sorthashinfo.hashagg_time * 1000;
     }
+    plan_info.hash_width = planstate->plan->righttree->plan_width;
 }
 
 void get_join_plan_info(knl_plan_info_context &plan_info, Join *joinplan)

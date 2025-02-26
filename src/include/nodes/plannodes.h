@@ -1285,6 +1285,7 @@ typedef enum SAggMethod {
 typedef struct Agg {
     Plan plan;
     AggStrategy aggstrategy;
+    bool is_redistribute;
 #ifdef USE_SPQ
     AggSplit aggsplittype;		/* agg-splitting mode, see nodes.h */
 #endif

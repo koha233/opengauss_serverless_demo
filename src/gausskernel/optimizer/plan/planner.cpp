@@ -11264,6 +11264,7 @@ static Plan *generate_hashagg_plan(PlannerInfo *root, Plan *plan, List *final_li
         plan->plan_rows = final_groups;
         plan->l_input_rows = plan->lefttree->plan_rows;
         ((Agg *)plan)->numGroups = (long)Min(plan->plan_rows, (double)LONG_MAX);
+        ((Agg *)plan)->is_redistribute = true;
         /* add new agg node cost */
         Distribution *distribution = ng_get_dest_distribution(plan);
         ng_copy_distribution(&hashed_p.distribution, distribution);
