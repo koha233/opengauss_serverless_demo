@@ -286,6 +286,7 @@ static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, Str
 static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream);
 static void get_datanode_info(knl_plan_info_context &query_info, PlanState *planstate);
 static void get_hashjoin_info(knl_plan_info_context &query_info, VecHashJoinState *vectorhashjoinstate);
+static void get_plan_output(List *ancestors, List *rtable, knl_query_info_context *query_info, knl_plan_info_context& plan_info, const PlanState *planstate);
 static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info);
 static int ExtractParamIndex(const std::string &filter);
 static void get_stream_send_time(knl_plan_info_context& plan_info, const PlanState *planstate);
@@ -1510,6 +1511,8 @@ void InitPlanInfo(knl_plan_info_context& plan_info, knl_query_info_context* quer
     plan_info.down_dop = 0;
     plan_info.disk_ratio = 0;
     plan_info.agg_groups = 0;
+    plan_info.output ="";
+    plan_info.is_executed = true;
     plan_info.hash_width = 0;
 }
 
@@ -1750,7 +1753,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << "build_time;hash_time;hash_table_size;jointype;hash_width;"  
                       << "stream_data_send_time;stream_quota_time;"
                       << "stream_poll_time;stream_data_copy_time;up_dop;down_dop;"
-                      << "child_plan\n";
+                      << "child_plan;is_executed\n";
         }
         for (const auto& pair : query_info->Plans) {
             auto& plan_id = pair.first;
@@ -1774,7 +1777,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
                       << plan.hash_table_size << ";" << plan.jointype << ";" << plan.hash_width << ";" 
                       << plan.stream_data_send_time << ";" << plan.stream_quota_time << ";"
                       << plan.stream_poll_time << ";" << plan.stream_data_copy_time  << ";"  << plan.up_dop << ";" << plan.down_dop << ";"
-                      << child_plan << "\n";  // 写入计划信息
+                      << child_plan << ";" << plan.is_executed << "\n";  // 写入计划信息
         }             
 
         plan_file.close();
@@ -1910,6 +1913,9 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_read_time);
             plan_info.io_time += INSTR_TIME_GET_MILLISEC(buf_usage->blk_write_time);
         }
+    }
+    else{
+        plan_info.is_executed = false;
     }
 }
 
@@ -2139,11 +2145,65 @@ static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info)
 
         for (auto &plan_entry : query_info->Plans) {
             std::string filter = plan_entry.second.filter;
+            std::string output = plan_entry.second.output;
             if (!filter.empty() && filter.find("$" + std::to_string(param_index)) != std::string::npos) {
+                plan_entry.second.child_plan_ids.push_back(subpair.first);
+            }
+            else if(!output.empty() && output.find("$" + std::to_string(param_index)) != std::string::npos) {
                 plan_entry.second.child_plan_ids.push_back(subpair.first);
             }
         }
     }
+}
+static void get_plan_output(List *ancestors, List *rtable, knl_plan_info_context& plan_info, const PlanState *planstate){
+    Plan *plan = planstate->plan;
+    List *context = NIL;
+    std::string result;
+    bool useprefix = false;
+    ListCell *lc = NULL;
+
+    /* No work if empty tlist (this occurs eg in bitmap indexscans) */
+    if (plan->targetlist == NIL)
+        return;
+    /* The tlist of an Append isn't real helpful, so suppress it */
+    if (IsA(plan, Append) || IsA(plan, VecAppend))
+        return;
+    /* Likewise for MergeAppend and RecursiveUnion */
+    if (IsA(plan, MergeAppend) || IsA(plan, VecMergeAppend))
+        return;
+    if (IsA(plan, RecursiveUnion) || IsA(plan, VecRecursiveUnion))
+        return;
+
+    /* Set up deparsing context */
+    context = deparse_context_for_planstate((Node *)planstate, ancestors, rtable);
+    useprefix = list_length(rtable) > 1;
+
+    /* Deparse each result column (we now include resjunk ones) */
+    foreach (lc, plan->targetlist) {
+        TargetEntry *tle = (TargetEntry *)lfirst(lc);
+
+        /* skip pseudo columns once startwith exist */
+        if (IsPseudoReturnTargetEntry(tle) || IsPseudoInternalTargetEntry(tle)) {
+            continue;
+        }
+
+        result += deparse_expression((Node *)tle->expr, context, useprefix, false);
+    }
+
+    if (IsA(plan, ForeignScan) || IsA(plan, VecForeignScan)) {
+        ForeignScan *fscan = (ForeignScan *)plan;
+        if (OidIsValid(fscan->scan_relid) && IsSpecifiedFDWFromRelid(fscan->scan_relid, GC_FDW)) {
+            List *str_targetlist = get_str_targetlist(fscan->fdw_private);
+            if (str_targetlist != NULL){
+                foreach (lc, str_targetlist) {
+                    Value* val = (Value*)lfirst(lc);
+                    result += val->val.str;
+                }
+            }
+
+        }
+    }
+    plan_info.output = result;
 }
 
 void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState *planstate, List *ancestors,
@@ -2221,6 +2281,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
                 }
             }
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         } break;
         case T_IndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
@@ -2228,6 +2289,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             }
             plan_info.index_names = get_scan_qual(((IndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         } break;
 #ifdef USE_SPQ
         case T_SpqIndexOnlyScan:
@@ -2238,19 +2300,23 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             }
             plan_info.index_names = get_scan_qual(((IndexOnlyScan *)plan)->indexqual, planstate, ancestors, rtable);
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         } break;
         case T_BitmapIndexScan: {
             plan_info.index_names = get_scan_qual(((BitmapIndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         } break;
         case T_CStoreIndexScan: {
             if (GetTargetRel(plan, ((Scan *)plan)->scanrelid, rtable, table_name, false)) {
                 plan_info.table_names = table_name;
             }
             plan_info.index_names = get_scan_qual(((CStoreIndexScan *)plan)->indexqualorig, planstate, ancestors, rtable);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
             plan_info.filter = get_scan_qual(plan->qual, planstate, ancestors, rtable);
         } break;
         case T_CStoreIndexCtidScan: {
             plan_info.filter = get_scan_qual(((CStoreIndexCtidScan *)plan)->indexqualorig, planstate, ancestors, rtable);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         } break;
         case T_ModifyTable:
         case T_VecModifyTable: {
@@ -2260,6 +2326,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             if (GetTargetRel(plan, rti, rtable, table_name, multiTarget)) {
                 plan_info.table_names = table_name;
             }
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         } break;
         // case T_Material:
         // case T_VecMaterial:{
@@ -2272,6 +2339,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.join_names = get_upper_qual(((NestLoop *)plan)->join.joinqual, planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
             get_join_plan_info(plan_info, (Join *)plan);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         }break;
         case T_VecMergeJoin:
         case T_MergeJoin:
@@ -2280,16 +2348,17 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.join_names = get_upper_qual(mergeJoin->mergeclauses, planstate, ancestors, rtable);
             plan_info.filter = get_upper_qual(plan->qual,  planstate, ancestors, rtable);
             get_join_plan_info(plan_info, (Join *)plan);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         }break;
         case T_HashJoin: {
-            {
-                HashJoin *hashjoin = (VecHashJoin *)plan;
+                HashJoin *hashjoin = (HashJoin *)plan;
                 plan_info.join_names = get_upper_qual(hashjoin->hashclauses, planstate, ancestors, rtable);
                 plan_info.filter = get_upper_qual(hashjoin->join.joinqual, planstate, ancestors, rtable);
+                plan_info.hash_table_size = hashjoin->total_mem_size;
+                plan_info.is_left_hash_table = hashjoin->is_left_table;
                 get_join_plan_info(plan_info, (Join *)plan);
-            }
-            break;
-        }
+                get_plan_output(ancestors, rtable, plan_info, planstate);
+        }break;
         case T_VecHashJoin:
         {
             VecHashJoin *hashjoin = (VecHashJoin *)plan;
@@ -2299,6 +2368,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
             plan_info.is_left_hash_table = hashjoin->is_left_table;
             get_join_plan_info(plan_info, (Join *)plan);
             get_hashjoin_info(plan_info, (VecHashJoinState *)planstate);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         }break;
         case T_SetOp:
         case T_VecSetOp:
@@ -2309,6 +2379,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_VecAgg:
         case T_Agg: {
             get_agg_plan_info(plan_info, (AggState *)planstate);
+            get_plan_output(ancestors, rtable, plan_info, planstate);
         }break;
         case T_VecStream:
         {

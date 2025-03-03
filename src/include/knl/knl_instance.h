@@ -1311,6 +1311,10 @@ typedef struct knl_g_spq_context {
 } knl_g_spq_context;
 #endif
 
+typedef struct knl_model_trainer_context {
+    int a;
+} knl_model_trainer_context;
+
 typedef struct knl_instance_context {
     knl_virtual_role role;
     volatile int status;

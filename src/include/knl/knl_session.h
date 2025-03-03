@@ -3049,12 +3049,14 @@ typedef struct knl_plan_info_context{
     double stream_data_send_time;
     double stream_quota_time;
     bool is_left_hash_table;
+    bool is_executed;
     int up_dop;
     int down_dop;
     std::string table_names;
     std::string index_names;
     std::string join_names;
     std::string filter;
+    std::string output;
     std::vector<int> child_plan_ids;
 } knl_plan_info_context;
 
