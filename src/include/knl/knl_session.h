@@ -3065,6 +3065,7 @@ typedef struct knl_query_info_context{
     std::string query_string;
     int dop;
     double execution_time;
+    double executor_start_time;
     double estimate_exec_time;
     int64 process_used_mem;
     int64 query_used_mem;

@@ -1720,7 +1720,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
     std::ofstream query_file(folder_path + "/query_info.csv", std::ios::app);  // 以追加模式打开文件
     if (query_file.is_open()) {
         if (IsFileEmpty(query_file)) {
-            query_file << "query_id;dop;execution_time;estimate_exec_time;"
+            query_file << "query_id;dop;execution_time;executor_start_time;"
                        << "query_used_mem;operator_mem;"
                        << "process_used_mem;estimate_work_mem;cstore_buffers;instance_mem;"
                        << "max_dynamic_memory;dynamic_startup_memory;init_used_memory;dynamic_peak_memory;other_memory;"
@@ -1730,7 +1730,7 @@ void WriteQueryInfoToCsv(const knl_query_info_context *query_info, const std::st
         // 更新 query_id 计数器
         UpdateQueryIdCounter(counter_file_path, query_id + 1);
         query_file << query_id << ";" << query_info->dop
-                   << ";" << query_info->execution_time << ";" << query_info->estimate_exec_time << ";"
+                   << ";" << query_info->execution_time << ";" << query_info->executor_start_time << ";"
                    << query_info->query_used_mem << ";"  << query_info->operator_mem << ";" 
                    << query_info->process_used_mem << ";" << query_info->estimate_work_mem << ";" << query_info->cstore_buffers << ";" << query_info->instance_mem << ";" 
                    << query_info->max_dynamic_memory << ";" << query_info->dynamic_startup_memory << ";" << query_info->init_used_memory << ";" << query_info->dynamic_peak_memory << ";" << query_info->other_memory << ";"
@@ -2142,7 +2142,9 @@ static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info)
     for (const auto &subpair : query_info->SubPlans) {
         // 假设 $0 的数字是通过某种方式提取的
         int param_index = ExtractParamIndex(subpair.second);
-
+        // 提取 `SubPlan x` 这种格式的字符串
+        size_t pos = subpair.second.find(" (");
+        std::string subplan_name = (pos != std::string::npos) ? subpair.second.substr(0, pos) : subpair.second;
         for (auto &plan_entry : query_info->Plans) {
             std::string filter = plan_entry.second.filter;
             std::string output = plan_entry.second.output;
@@ -2150,6 +2152,9 @@ static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info)
                 plan_entry.second.child_plan_ids.push_back(subpair.first);
             }
             else if(!output.empty() && output.find("$" + std::to_string(param_index)) != std::string::npos) {
+                plan_entry.second.child_plan_ids.push_back(subpair.first);
+            }
+            else if (!filter.empty() && filter.find(subplan_name) != std::string::npos) {
                 plan_entry.second.child_plan_ids.push_back(subpair.first);
             }
         }

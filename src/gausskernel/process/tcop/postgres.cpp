@@ -3044,7 +3044,6 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
             u_sess->wlm_cxt->cgroup_last_stmt = u_sess->wlm_cxt->cgroup_stmt;
             u_sess->wlm_cxt->cgroup_stmt = WLMIsSpecialCommand(parsetree, portal);
         }
-
         /*
          * Run the portal to completion, and then drop it (and the receiver).
          */
@@ -3053,6 +3052,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         }
         if(query_info->is_user_sql)
         query_info->init_used_memory = (int)(peakChunksPerProcess << (chunkSizeInBits - BITS_IN_MB)) * 1024;
+        query_info->executor_start_time = elapsed_time(&exec_starttime) * 1000;
         (void)PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, completionTag);
 
         (*receiver->rDestroy)(receiver);
