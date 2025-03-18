@@ -286,6 +286,7 @@ static void show_ndpplugin_statistic(ExplainState *es, PlanState *planstate, Str
 static void getStreaminfo(knl_plan_info_context& plan_info, Stream *stream);
 static void get_datanode_info(knl_plan_info_context &query_info, PlanState *planstate);
 static void get_hashjoin_info(knl_plan_info_context &query_info, VecHashJoinState *vectorhashjoinstate);
+static void get_sort_plan_info(knl_plan_info_context &plan_info, SortState *sortstate);
 static void get_plan_output(List *ancestors, List *rtable, knl_query_info_context *query_info, knl_plan_info_context& plan_info, const PlanState *planstate);
 static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info);
 static int ExtractParamIndex(const std::string &filter);
@@ -1973,6 +1974,12 @@ void get_agg_plan_info(knl_plan_info_context &plan_info, AggState *aggstate)
     }
 }
 
+void get_sort_plan_info(knl_plan_info_context &plan_info, SortState *sortstate)
+{
+    Sort *plan = (Sort *)sortstate->ss.ps.plan;
+    plan_info.agg_col = plan->numCols;
+}
+
 void get_hashjoin_info(knl_plan_info_context &plan_info, VecHashJoinState *vectorhashjoinstate)
 {
     PlanState *planstate = (PlanState *)vectorhashjoinstate;
@@ -2389,6 +2396,11 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_VecStream:
         {
             getStreaminfo(plan_info, (Stream *)plan);
+        }break;
+        case T_Sort:
+        case T_VecSort:
+        {
+            get_sort_plan_info(plan_info, (Sort *)plan);
         }break;
         default:
             break;

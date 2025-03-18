@@ -585,8 +585,8 @@ void set_rel_path_rows(Path* path, RelOptInfo* rel, ParamPathInfo* param_info)
  * Set the real path rows after parallel.
  *
  * @in_param path: the path need to be corrected.
- */
 static void set_parallel_path_rows(Path* path)
+ */
 {
     int dop = SET_DOP(path->dop);
 
