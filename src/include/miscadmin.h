@@ -392,7 +392,7 @@ extern THR_LOCAL PGDLLIMPORT char my_exec_path[];
 
 extern uint8 ce_cache_refresh_type;
 
-#define MAX_QUERY_DOP (64)
+#define MAX_QUERY_DOP (192)
 #define MIN_QUERY_DOP -(MAX_QUERY_DOP)
 
 extern const uint32 BACKUP_SLOT_VERSION_NUM;

@@ -2400,7 +2400,7 @@ void CollectPlanInfo(knl_query_info_context *query_info, List *rtable, PlanState
         case T_Sort:
         case T_VecSort:
         {
-            get_sort_plan_info(plan_info, (Sort *)plan);
+            get_sort_plan_info(plan_info, (SortState *)planstate);
         }break;
         default:
             break;
