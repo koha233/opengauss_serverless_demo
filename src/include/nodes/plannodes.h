@@ -31,6 +31,20 @@
 #define MAX_SPECIAL_BUCKETMAP_NUM    20
 #define BUCKETMAP_DEFAULT_INDEX_BIT (1 << 31)
 
+struct Operator_Dop_Info {
+    int plan_id;
+    std::string operator_type;
+    int width;
+    int dop;
+    int left_child;
+    int parent_child;
+    bool visit;
+};
+
+struct Query_Dop_Info {
+    int operator_num;
+    int max_dop;
+};
 /*
  * Determines the position where the RemoteQuery node will run.
  */

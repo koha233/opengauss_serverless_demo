@@ -291,6 +291,7 @@ static void get_plan_output(List *ancestors, List *rtable, knl_query_info_contex
 static void ConnectSubPlansToScanOperators(knl_query_info_context *query_info);
 static int ExtractParamIndex(const std::string &filter);
 static void get_stream_send_time(knl_plan_info_context& plan_info, const PlanState *planstate);
+
 /*
  * ExplainQuery -
  *	  execute an EXPLAIN command
@@ -1894,12 +1895,12 @@ static void get_datanode_info(knl_plan_info_context &plan_info, PlanState *plans
                     }
                 }
             }
+            plan_info.actual_rows = rows;
+            plan_info.nloops = instr->nloops;
+            plan_info.total_time = exec_sec_max;
+            plan_info.actural_width = width_max;
+            plan_info.start_up_time = start_up_sec_min;
         }
-        plan_info.actual_rows = rows;
-        plan_info.nloops = instr->nloops;
-        plan_info.total_time = exec_sec_max;
-        plan_info.actural_width = width_max;
-        plan_info.start_up_time = start_up_sec_min;
     } else if (planstate->instrument && planstate->instrument->nloops > 0) {
         instr = planstate->instrument;
         plan_info.actual_rows = instr->ntuples;
@@ -2639,6 +2640,205 @@ runnext:
     //     show_plan_tlist(planstate, ancestors, es);
     // }
 }
+
+// 读取 `query_X.txt` 并建立 `plan_id -> Operator` map
+std::unordered_map<int, Operator_Dop_Info> readOperatorsFromFile(const std::string& filename) {
+    std::unordered_map<int, Operator_Dop_Info> operator_map;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "无法打开文件: " << filename << std::endl;
+        return operator_map;
+    }
+
+    std::string line;
+    std::getline(file, line);  // 跳过标题行
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string plan_id_str, operator_type, width_str, dop_str, left_child_str, parent_child_str;
+
+        std::getline(ss, plan_id_str, ',');
+        std::getline(ss, operator_type, ',');
+        std::getline(ss, width_str, ',');
+        std::getline(ss, dop_str, ',');
+        std::getline(ss, left_child_str, ',');
+        std::getline(ss, parent_child_str, ',');
+
+        int plan_id = std::stoi(plan_id_str);
+        int width = std::stoi(width_str);
+        int dop = std::stoi(dop_str);
+        int left_child = std::stoi(left_child_str);
+        int parent_child = std::stoi(parent_child_str);
+
+        operator_map[plan_id] = {plan_id, operator_type, width, dop, left_child, parent_child, false};
+    }
+
+    file.close();
+    return operator_map;
+}
+
+// 在 operator_map 中查找匹配的算子
+Operator_Dop_Info* findMatchingOperator(std::unordered_map<int, Operator_Dop_Info>& operator_map, int plan_id, 
+                               const std::string& operator_type, int width) {
+    // 1. 先查找 plan_id 是否匹配
+    auto it = operator_map.find(plan_id);
+    if (it != operator_map.end()) {
+        if (it->second.operator_type == operator_type && it->second.width == width) {
+            it->second.visit = true;
+            return &it->second;  // 匹配成功
+        }
+    }
+
+    // 2. 遍历所有算子，查找 `operator_type` 和 `estimate_costs` 相同的
+    for (auto& entry : operator_map) {
+        if (entry.second.operator_type == operator_type && entry.second.width == width && !entry.second.visit) {
+            entry.second.visit = true;
+            return &entry.second;
+        }
+    }
+
+    return nullptr;  // 没找到匹配项
+}
+
+void set_member_dop(List *plans, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info){
+    ListCell *lc = NULL;
+    foreach (lc , plans){
+        set_operator_dop((Plan*)lfirst(lc), plan_map, query_info);
+    }
+}
+
+void set_operator_dop(Plan *plan, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info){
+    char *pname = NULL; /* node type name for text output */
+    char *sname = NULL; /* node type name for non-text output */
+    char *strategy = NULL;
+    char *operation = NULL;
+    bool haschildren = false;
+    // int plan_node_id = plan->plan_node_id;
+    // int parentid = plan->parent_node_id;
+    // StringInfo tmpName = nullptr;
+
+    /* For plan_table column */
+    char *pt_operation = NULL;
+    char *pt_options = NULL;
+    std::string table_name;
+    std::string operator_type;
+    /* Fetch plan node's plain text info */
+    GetPlanNodePlainText(plan, &pname, &sname, &strategy, &operation, &pt_operation, &pt_options);
+    operator_type = sname;
+    if(nodeTag(plan) == T_VecStream || nodeTag(plan) == T_Stream){
+        // 正则表达式匹配字符串中的关键部分
+        std::regex pattern(R"(Vector Streaming\(type: ([\w\s]+) dop: (\d+)/(\d+)\))");
+        std::smatch matches;
+        if (std::regex_search(operator_type, matches, pattern)) {
+            // 提取类型和dop的数字
+            std::string tmp = matches[1];
+            operator_type = "Vector Streaming " + tmp;
+        }
+    }
+    plan->map_id = query_info.operator_num;
+    query_info.operator_num++;
+    auto plan_info = findMatchingOperator(plan_map, plan->map_id, operator_type, plan->plan_width);
+    if(!plan_info)goto runnext;
+    plan->dop = plan_info->dop;
+    plan->parallel_enabled = (plan->dop > 1);
+    query_info.max_dop = Max(plan->dop, query_info.max_dop);
+    switch (nodeTag(plan)) {
+        case T_Stream:
+        case T_VecStream:
+        {
+            Stream *stream = (Stream *)plan;
+            stream->smpDesc.consumerDop = plan->dop;
+            if(plan_map.count(plan_info->left_child) > 0)
+            stream->smpDesc.producerDop = plan_map[plan_info->left_child].dop;
+        }break;
+        default:
+            break;
+    }
+
+runnext:
+
+    /* Get ready to display the child plans */
+    haschildren = plan->initPlan || plan->lefttree || plan->righttree ||
+                  IsA(plan, ModifyTable) || IsA(plan, VecModifyTable) || IsA(plan, Append) || IsA(plan, VecAppend) ||
+                  IsA(plan, MergeAppend) || IsA(plan, VecMergeAppend) || IsA(plan, BitmapAnd) || IsA(plan, BitmapOr) ||
+                  IsA(plan, SubqueryScan) || IsA(plan, VecSubqueryScan);
+
+    /* initPlan-s */
+    if (plan->initPlan) {
+        ListCell *lst = NULL;
+        foreach (lst, plan->initPlan) {
+            SubPlan *sp = (SubPlan *)lfirst(lst);
+            if (sp == NULL)
+                continue;
+            if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
+                continue;
+            }
+            set_operator_dop((Plan *)sp, plan_map, query_info);
+        }
+    }
+
+    /* Cte distributed support */
+    if (IS_STREAM_PLAN && IsA(plan, CteScan)) {
+        CteScan *cs = (CteScan *)plan;
+
+        if (cs) {
+            set_operator_dop((Plan *)cs, plan_map, query_info);
+        }
+    }
+
+    /* lefttree */
+    if (plan->lefttree) {
+        set_operator_dop(plan->lefttree, plan_map, query_info);
+    }
+
+    /* righttree */
+    if (plan->righttree) {
+        set_operator_dop(plan->righttree, plan_map, query_info);
+    }
+
+    /* special child plans */
+    switch (nodeTag(plan)) {
+        case T_ModifyTable:
+        case T_VecModifyTable: {
+            set_member_dop(((ModifyTable *)plan)->plans, plan_map, query_info);
+        } break;
+        case T_VecAppend:
+        case T_Append: {
+            set_member_dop(((Append *)plan)->appendplans, plan_map, query_info);
+        } break;
+        case T_MergeAppend: {
+            set_member_dop(((MergeAppend *)plan)->mergeplans, plan_map, query_info);
+        } break;
+        case T_BitmapAnd: {
+            set_member_dop(((BitmapAnd *)plan)->bitmapplans, plan_map, query_info);
+        } break;
+        case T_BitmapOr: {
+            set_member_dop(((BitmapOr *)plan)->bitmapplans, plan_map, query_info);
+        } break;
+        case T_CStoreIndexAnd: {
+            set_member_dop(((CStoreIndexAnd *)plan)->bitmapplans, plan_map, query_info);
+        } break;
+        case T_CStoreIndexOr: {
+            set_member_dop(((CStoreIndexOr *)plan)->bitmapplans, plan_map, query_info);
+        } break;
+        case T_SubqueryScan:
+        case T_VecSubqueryScan: {
+            set_operator_dop(((SubqueryScan *)plan)->subplan, plan_map, query_info);
+        } break;
+        case T_ExtensiblePlan: {
+            ListCell *cell = NULL;
+            ExtensiblePlan *epplans = (ExtensiblePlan *)plan;
+            foreach (cell, epplans->extensible_plans)
+            {
+                set_operator_dop((Plan *)lfirst(cell), plan_map, query_info);
+            }
+        } break;
+        default:
+            break;
+    }
+
+}
+
 
 /*
  * ExplainQueryText -

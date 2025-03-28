@@ -683,13 +683,13 @@ static void InitStream(StreamFlowCtl* ctl, StreamTransType transType)
     bool isTopStreamNode = ((IsA(ctl->pstmt->planTree, Stream) || IsA(ctl->pstmt->planTree, VecStream)) &&
                                ctl->pstmt->planTree->plan_node_id == ctl->plan->plan_node_id)
                                 ? true : false;
-    if (!isTopStreamNode && !startall) {
-        CheckStreamMatchInfo(ctl->checkInfo,
-            plan->plan_node_id,
-            streamNode->consumer_nodes->nodeList,
-            streamNode->smpDesc.consumerDop,
-            isLocalStream);
-    }
+    // if (!isTopStreamNode && !startall) {
+    //     CheckStreamMatchInfo(ctl->checkInfo,
+    //         plan->plan_node_id,
+    //         streamNode->consumer_nodes->nodeList,
+    //         streamNode->smpDesc.consumerDop,
+    //         isLocalStream);
+    // }
 
     /* Backup checkinfo (for current stream thread layer) and save checkInfo for the next node */
     List* saved_parentProducerExecNodeList = ctl->checkInfo.parentProducerExecNodeList;

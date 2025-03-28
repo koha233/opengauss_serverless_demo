@@ -43,5 +43,6 @@ void ExceptionalCondition(const char* conditionName, const char* errorType, cons
     sleep(1000000);
 #endif
 
+
     abort();
 }

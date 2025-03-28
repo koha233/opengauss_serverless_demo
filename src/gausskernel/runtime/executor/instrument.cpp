@@ -1771,7 +1771,7 @@ void StreamInstrumentation::getStreamInfo(
     Plan* result_plan, PlannedStmt* planned_stmt, int dop, ThreadInstrInfo* info, int offset)
 {
     int node_id = result_plan->plan_node_id;
-    int query_dop = result_plan->parallel_enabled ? dop : 1;
+    int query_dop = result_plan->parallel_enabled ? query_dop : 1;
 
     /* record node dop in every plannodeid */
     m_node_dops[node_id - m_start_node_id] = query_dop;

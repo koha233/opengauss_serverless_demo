@@ -1484,8 +1484,8 @@ __attribute__((unused)) static bool is_insert_multiple_values_query_in_gtmfree(Q
 List *pg_plan_queries(List *querytrees, int cursorOptions, ParamListInfo boundParams)
 {
     OgRecordAutoController _local_opt(SRT4_PLAN_QUERY);
-    List *stmt_list = NIL;
     ListCell *query_list = NULL;
+    List *stmt_list = NIL;
 
     /* for abstimeout, transfer time to str in insert has some problem,
      *  so distinguish insert and select situation for ABSTIMEOUTFUN to avoid problem.*/
@@ -2881,6 +2881,16 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
             std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\r', ' ');
             std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\t', ' ');
             query_info->dop = u_sess->opt_cxt.query_dop;
+            auto dop_maps = readOperatorsFromFile("../json/query.txt");
+            Query_Dop_Info query_dop_info;
+            query_dop_info.max_dop = 0;
+            query_dop_info.operator_num = 0;
+            PlannedStmt* ps = (PlannedStmt*)linitial(plantree_list);
+            set_operator_dop(ps->planTree, dop_maps, query_dop_info);
+            ps->dynsmp_plan_optimal_dop = query_dop_info.max_dop;
+            ps->query_dop = query_dop_info.max_dop;
+            u_sess->opt_cxt.query_dop = ps->query_dop;
+            u_sess->opt_cxt.query_dop_store = ps->query_dop;
         }
 
         /* sqladvisor collect query */
