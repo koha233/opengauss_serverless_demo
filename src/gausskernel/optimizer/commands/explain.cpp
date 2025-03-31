@@ -2752,12 +2752,6 @@ void set_operator_dop(PlanState *planstate, std::unordered_map<int, Operator_Dop
             stream->smpDesc.consumerDop = plan->dop;
             if(plan_map.count(plan_info->left_child) > 0)
             stream->smpDesc.producerDop = plan_map[plan_info->left_child].dop;
-            if(stream->smpDesc.producerDop >= 1 && stream->smpDesc.consumerDop == 1){
-                stream->type = STREAM_GATHER;
-            }
-            else if(stream->smpDesc.producerDop == 1 && stream->smpDesc.consumerDop > 1){
-                stream->type = STREAM_BROADCAST;
-            }
         }break;
         default:
             break;
