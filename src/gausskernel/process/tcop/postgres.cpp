@@ -2881,16 +2881,6 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
             std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\r', ' ');
             std::replace(query_info->query_string.begin(), query_info->query_string.end(), '\t', ' ');
             query_info->dop = u_sess->opt_cxt.query_dop;
-            auto dop_maps = readOperatorsFromFile("../json/query.txt");
-            Query_Dop_Info query_dop_info;
-            query_dop_info.max_dop = 0;
-            query_dop_info.operator_num = 0;
-            PlannedStmt* ps = (PlannedStmt*)linitial(plantree_list);
-            set_operator_dop(ps->planTree, dop_maps, query_dop_info);
-            ps->dynsmp_plan_optimal_dop = query_dop_info.max_dop;
-            ps->query_dop = query_dop_info.max_dop;
-            u_sess->opt_cxt.query_dop = ps->query_dop;
-            u_sess->opt_cxt.query_dop_store = ps->query_dop;
         }
 
         /* sqladvisor collect query */
@@ -3014,6 +3004,50 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         /*
          * Start the portal.  No parameters here.
          */
+        if(query_info->is_user_sql){
+            PortalStart(portal, NULL, 0, InvalidSnapshot);
+            auto dop_maps = readOperatorsFromFile("../json/query.txt");
+            Query_Dop_Info query_dop_info;
+            query_dop_info.max_dop = 0;
+            query_dop_info.operator_num = 0;
+            PlannedStmt* ps = (PlannedStmt*)linitial(plantree_list);
+            set_operator_dop(portal->queryDesc->planstate, dop_maps, query_dop_info);
+            ps->dynsmp_plan_optimal_dop = query_dop_info.max_dop;
+            ps->query_dop = query_dop_info.max_dop;
+            u_sess->opt_cxt.query_dop = ps->query_dop;
+            u_sess->opt_cxt.query_dop_store = ps->query_dop;
+            portal = CreatePortal("", true, true);
+            portal->visible = false;
+            if (HYBRID_MESSAGE != messageType) {
+                if (is_multistmt && (IsConnFromApp() || IsConnFromInternalTool())) {
+                    PortalDefineQuery(portal, NULL, query_string_single[stmt_num - 1], commandTag, plantree_list, NULL);
+                } else
+                    PortalDefineQuery(portal, NULL, query_string, commandTag, plantree_list, NULL);
+            } else {
+                PortalDefineQuery(portal, NULL, sql_query_string, commandTag, plantree_list, NULL);
+            }
+
+            /* PortalRun will reset this flag */
+            portal->nextval_default_expr_type = u_sess->opt_cxt.nextval_default_expr_type;
+
+            if (ENABLE_WORKLOAD_CONTROL && IS_PGXC_COORDINATOR && is_multi_query_text) {
+                if (t_thrd.wlm_cxt.collect_info->sdetail.statement) {
+                    pfree_ext(t_thrd.wlm_cxt.collect_info->sdetail.statement);
+                }
+
+                AutoContextSwitch memSwitch(t_thrd.wlm_cxt.query_resource_track_mcxt);
+                /* g_collectInfo.sdetail.statement will be free in WLMReleaseStmtDetailItem() */
+                if (strlen(portal->sourceText) < 8 * KBYTES) {
+                    t_thrd.wlm_cxt.collect_info->sdetail.statement = pstrdup(portal->sourceText);
+                } else {
+                    t_thrd.wlm_cxt.collect_info->sdetail.statement = (char *)palloc0(8 * KBYTES);
+                    errno_t rc = strncpy_s(t_thrd.wlm_cxt.collect_info->sdetail.statement, 8 * KBYTES, portal->sourceText,
+                                        8 * KBYTES - 1);
+                    securec_check(rc, "\0", "\0");
+                }
+            }
+            peakChunksPerProcess = 0;
+        }
         instr_time exec_starttime;
         INSTR_TIME_SET_CURRENT(exec_starttime);
         PortalStart(portal, NULL, 0, InvalidSnapshot);

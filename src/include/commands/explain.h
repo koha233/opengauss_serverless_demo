@@ -542,7 +542,6 @@ extern void print_explain_info(StreamInstrumentation* instrumentdata, QueryDesc*
 extern bool checkSelectStmtForPlanTable(List* rangeTable);
 extern int checkPermsForPlanTable(RangeTblEntry* rte);
 extern std::unordered_map<int, Operator_Dop_Info> readOperatorsFromFile(const std::string& filename);
-extern void set_operator_dop(Plan *plan, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info);
-extern void set_member_dop(List *plans, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info);
-
+extern void set_operator_dop(PlanState *planstate, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info);
+extern void set_member_dop(List *plans, PlanState **planstates, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info);
 #endif /* EXPLAIN_H */

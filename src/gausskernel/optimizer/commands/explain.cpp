@@ -2641,6 +2641,7 @@ runnext:
     // }
 }
 
+
 // 读取 `query_X.txt` 并建立 `plan_id -> Operator` map
 std::unordered_map<int, Operator_Dop_Info> readOperatorsFromFile(const std::string& filename) {
     std::unordered_map<int, Operator_Dop_Info> operator_map;
@@ -2683,15 +2684,15 @@ Operator_Dop_Info* findMatchingOperator(std::unordered_map<int, Operator_Dop_Inf
     // 1. 先查找 plan_id 是否匹配
     auto it = operator_map.find(plan_id);
     if (it != operator_map.end()) {
-        if (it->second.operator_type == operator_type && it->second.width == width) {
+        if (it->second.operator_type == operator_type) {
             it->second.visit = true;
             return &it->second;  // 匹配成功
         }
     }
 
-    // 2. 遍历所有算子，查找 `operator_type` 和 `estimate_costs` 相同的
+    // 2. 遍历所有算子
     for (auto& entry : operator_map) {
-        if (entry.second.operator_type == operator_type && entry.second.width == width && !entry.second.visit) {
+        if (entry.second.operator_type == operator_type && !entry.second.visit) {
             entry.second.visit = true;
             return &entry.second;
         }
@@ -2700,19 +2701,20 @@ Operator_Dop_Info* findMatchingOperator(std::unordered_map<int, Operator_Dop_Inf
     return nullptr;  // 没找到匹配项
 }
 
-void set_member_dop(List *plans, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info){
-    ListCell *lc = NULL;
-    foreach (lc , plans){
-        set_operator_dop((Plan*)lfirst(lc), plan_map, query_info);
+void set_member_dop(List *plans, PlanState **planstates, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info){
+    int nplans = list_length(plans);
+    for (int j = 0; j < nplans; j++) {
+        set_operator_dop(planstates[j], plan_map, query_info);
     }
 }
 
-void set_operator_dop(Plan *plan, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info){
+void set_operator_dop(PlanState *planstate, std::unordered_map<int, Operator_Dop_Info>& plan_map, Query_Dop_Info& query_info){
     char *pname = NULL; /* node type name for text output */
     char *sname = NULL; /* node type name for non-text output */
     char *strategy = NULL;
     char *operation = NULL;
     bool haschildren = false;
+    Plan* plan = planstate->plan;
     // int plan_node_id = plan->plan_node_id;
     // int parentid = plan->parent_node_id;
     // StringInfo tmpName = nullptr;
@@ -2750,6 +2752,12 @@ void set_operator_dop(Plan *plan, std::unordered_map<int, Operator_Dop_Info>& pl
             stream->smpDesc.consumerDop = plan->dop;
             if(plan_map.count(plan_info->left_child) > 0)
             stream->smpDesc.producerDop = plan_map[plan_info->left_child].dop;
+            if(stream->smpDesc.producerDop >= 1 && stream->smpDesc.consumerDop == 1){
+                stream->type = STREAM_GATHER;
+            }
+            else if(stream->smpDesc.producerDop == 1 && stream->smpDesc.consumerDop > 1){
+                stream->type = STREAM_BROADCAST;
+            }
         }break;
         default:
             break;
@@ -2758,83 +2766,99 @@ void set_operator_dop(Plan *plan, std::unordered_map<int, Operator_Dop_Info>& pl
 runnext:
 
     /* Get ready to display the child plans */
-    haschildren = plan->initPlan || plan->lefttree || plan->righttree ||
+    haschildren = planstate->initPlan || plan->lefttree || plan->righttree ||
                   IsA(plan, ModifyTable) || IsA(plan, VecModifyTable) || IsA(plan, Append) || IsA(plan, VecAppend) ||
                   IsA(plan, MergeAppend) || IsA(plan, VecMergeAppend) || IsA(plan, BitmapAnd) || IsA(plan, BitmapOr) ||
-                  IsA(plan, SubqueryScan) || IsA(plan, VecSubqueryScan);
+                  IsA(plan, SubqueryScan) || IsA(plan, VecSubqueryScan) || planstate->subPlan;
 
-    /* initPlan-s */
-    if (plan->initPlan) {
+        /* initPlan-s */
+    if (planstate->initPlan) {
         ListCell *lst = NULL;
-        foreach (lst, plan->initPlan) {
-            SubPlan *sp = (SubPlan *)lfirst(lst);
-            if (sp == NULL)
+        foreach (lst, planstate->initPlan) {
+            SubPlanState *sps = (SubPlanState *)lfirst(lst);
+            SubPlan *sp = (SubPlan *)sps->xprstate.expr;
+            if (sps->planstate == NULL)
                 continue;
             if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
                 continue;
             }
-            set_operator_dop((Plan *)sp, plan_map, query_info);
+            set_operator_dop(sps->planstate, plan_map, query_info);
         }
     }
 
-    /* Cte distributed support */
+        /* Cte distributed support */
     if (IS_STREAM_PLAN && IsA(plan, CteScan)) {
-        CteScan *cs = (CteScan *)plan;
+        CteScanState *css = (CteScanState *)planstate;
 
-        if (cs) {
-            set_operator_dop((Plan *)cs, plan_map, query_info);
+        if (css->cteplanstate) {
+            set_operator_dop(css->cteplanstate, plan_map, query_info);
         }
     }
+
 
     /* lefttree */
-    if (plan->lefttree) {
-        set_operator_dop(plan->lefttree, plan_map, query_info);
+    if (planstate->lefttree) {
+        set_operator_dop(planstate->lefttree, plan_map, query_info);
     }
 
     /* righttree */
-    if (plan->righttree) {
-        set_operator_dop(plan->righttree, plan_map, query_info);
+    if (planstate->righttree) {
+        set_operator_dop(planstate->righttree, plan_map, query_info);
     }
 
     /* special child plans */
     switch (nodeTag(plan)) {
         case T_ModifyTable:
         case T_VecModifyTable: {
-            set_member_dop(((ModifyTable *)plan)->plans, plan_map, query_info);
+            set_member_dop(((ModifyTable *)plan)->plans, ((ModifyTableState *)planstate)->mt_plans, plan_map, query_info);
         } break;
         case T_VecAppend:
         case T_Append: {
-            set_member_dop(((Append *)plan)->appendplans, plan_map, query_info);
+            set_member_dop(((Append *)plan)->appendplans, ((AppendState *)planstate)->appendplans, plan_map, query_info);
         } break;
         case T_MergeAppend: {
-            set_member_dop(((MergeAppend *)plan)->mergeplans, plan_map, query_info);
+            set_member_dop(((MergeAppend *)plan)->mergeplans, ((MergeAppendState *)planstate)->mergeplans, plan_map, query_info);
         } break;
         case T_BitmapAnd: {
-            set_member_dop(((BitmapAnd *)plan)->bitmapplans, plan_map, query_info);
+            set_member_dop(((BitmapAnd *)plan)->bitmapplans, ((BitmapAndState *)planstate)->bitmapplans, plan_map, query_info);
         } break;
         case T_BitmapOr: {
-            set_member_dop(((BitmapOr *)plan)->bitmapplans, plan_map, query_info);
+            set_member_dop(((BitmapOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans, plan_map, query_info);
         } break;
         case T_CStoreIndexAnd: {
-            set_member_dop(((CStoreIndexAnd *)plan)->bitmapplans, plan_map, query_info);
+            set_member_dop(((CStoreIndexAnd *)plan)->bitmapplans, ((BitmapAndState *)planstate)->bitmapplans, plan_map, query_info);
         } break;
         case T_CStoreIndexOr: {
-            set_member_dop(((CStoreIndexOr *)plan)->bitmapplans, plan_map, query_info);
+            set_member_dop(((CStoreIndexOr *)plan)->bitmapplans, ((BitmapOrState *)planstate)->bitmapplans, plan_map, query_info);
         } break;
         case T_SubqueryScan:
         case T_VecSubqueryScan: {
-            set_operator_dop(((SubqueryScan *)plan)->subplan, plan_map, query_info);
+            set_operator_dop(((SubqueryScanState *)planstate)->subplan, plan_map, query_info);
         } break;
         case T_ExtensiblePlan: {
             ListCell *cell = NULL;
-            ExtensiblePlan *epplans = (ExtensiblePlan *)plan;
-            foreach (cell, epplans->extensible_plans)
+            ExtensiblePlanState *epplanstate = (ExtensiblePlanState *)planstate;
+            foreach (cell, epplanstate->extensible_ps)
             {
-                set_operator_dop((Plan *)lfirst(cell), plan_map, query_info);
+                set_operator_dop((PlanState *)lfirst(cell), plan_map, query_info);
             }
         } break;
         default:
             break;
+    }
+    /* subPlan-s */
+    if (planstate->subPlan) {
+        ListCell *lst = NULL;
+        foreach (lst, planstate->subPlan) {
+            SubPlanState *sps = (SubPlanState *)lfirst(lst);
+            SubPlan *sp = (SubPlan *)sps->xprstate.expr;
+            if (sps->planstate == NULL)
+                continue;
+            if (STREAM_RECURSIVECTE_SUPPORTED && sp->subLinkType == CTE_SUBLINK) {
+                continue;
+            }
+            set_operator_dop(sps->planstate, plan_map, query_info);
+        }
     }
 
 }
