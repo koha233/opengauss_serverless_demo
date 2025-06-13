@@ -2740,7 +2740,14 @@ void set_operator_dop(PlanState *planstate, std::unordered_map<int, Operator_Dop
     plan->map_id = query_info.operator_num;
     query_info.operator_num++;
     auto plan_info = findMatchingOperator(plan_map, plan->map_id, operator_type, plan->plan_width);
-    if(!plan_info)goto runnext;
+    if(!plan_info){
+        auto it = plan_map.find(plan->map_id);
+        if (it != plan_map.end()) {
+            plan->dop = plan_map[plan->map_id].dop;
+            plan->parallel_enabled = (plan->dop > 1);
+        }
+        goto runnext;
+    }
     plan->dop = plan_info->dop;
     plan->parallel_enabled = (plan->dop > 1);
     query_info.max_dop = Max(plan->dop, query_info.max_dop);
