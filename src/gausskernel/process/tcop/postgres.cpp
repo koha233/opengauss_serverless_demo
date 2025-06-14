@@ -3004,7 +3004,7 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         /*
          * Start the portal.  No parameters here.
          */
-        if(query_info->is_user_sql){
+        if(query_info->is_user_sql && !u_sess->attr.attr_resource.enable_resource_record){
             PortalStart(portal, NULL, 0, InvalidSnapshot);
             auto dop_maps = readOperatorsFromFile("../json/query.txt");
             Query_Dop_Info query_dop_info;
