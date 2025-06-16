@@ -1,4 +1,4 @@
--- using 1750072437 as a seed to the RNG
+-- using 1750075004 as a seed to the RNG
 
 
 select
@@ -20,7 +20,7 @@ where
 				from
 					part
 				where
-					p_name like 'puff%'
+					p_name like 'ivory%'
 			)
 			and ps_availqty > (
 				select
@@ -35,7 +35,7 @@ where
 			)
 	)
 	and s_nationkey = n_nationkey
-	and n_name = 'PERU'
+	and n_name = 'MOROCCO'
 order by
 	s_name;
 
