@@ -2963,6 +2963,9 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
          * Create unnamed portal to run the query or queries in. If there
          * already is one, silently drop it.
          */
+
+        print(plantree_list);
+
         portal = CreatePortal("", true, true);
         /* Don't display the portal in pg_cursors */
         portal->visible = false;
@@ -9338,6 +9341,7 @@ int PostgresMain(int argc, char *argv[], const char *dbname, const char *usernam
                     ereport(ERROR, (errcode(ERRCODE_UNEXPECTED_NULL_VALUE), errmsg("query_string is NULL.")));
                 }
                 char *mutable_query_string = strdup(query_string);
+                printf("query_plan is %s\n", mutable_query_string);
                 t_thrd.postgres_cxt.clobber_qstr = query_string;
                 List *plantree_list = (List *)stringToNode(mutable_query_string);
                 PlannedStmt *plan_stmt = (PlannedStmt *)linitial(plantree_list);
