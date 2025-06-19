@@ -21,10 +21,11 @@
  *
  * ---------------------------------------------------------------------------------------
  */
-
+#include "storage/httplib.h"
 #include "postgres.h"
 #include "knl/knl_variable.h"
 #include <fcntl.h>
+#include <sstream>
 #include <sys/file.h>
 #include "miscadmin.h"
 #include "access/cstore_rewrite.h"
@@ -509,26 +510,47 @@ void CUStorage::Load(_in_ uint64 offset, _in_ int size, __inout char* outbuf, bo
     char* read_buf = outbuf;
     char tmpFileName[MAXPGPATH];
     errno_t rc = 0;
-
+    ereport(LOG, (errmsg("http client to localhost:8080")));
+    httplib::Client client("localhost:8080");
     while (read_size > 0) {
         GetFileName(tmpFileName, MAXPGPATH, readFileId);
-        if (strcmp(tmpFileName, m_fileName) != 0) {
-            if (m_fd != FILE_INVALID)
-                FileClose(m_fd);
-            m_fd = OpenFile(tmpFileName, readFileId, direct_flag);
+        std::string filename(tmpFileName);
 
-            if (m_fd == FILE_INVALID) {
-                ereport(ERROR, (errcode_for_file_access(), errmsg("Could not open file \"%s\"", tmpFileName)));
-            }
-
-            rc = strcpy_s(m_fileName, MAXPGPATH, tmpFileName);
-            securec_check_c(rc, "\0", "\0");
+        std::stringstream ss;
+        ss << "/files/" << filename << "?offset=" << readOffset << "&length=" << read_size;
+        std::string uri = ss.str();
+        ereport(LOG, (errmsg("CUStorage Load: GET %s", uri.c_str())));
+        auto res = client.Get(uri);
+        if (!res || res->status != 200) {
+            ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
+                            errmsg("HTTP GET failed for %s: status=%d", uri.c_str(), res ? res->status : -1)));
         }
 
-        int nbytes = FilePRead(m_fd, read_buf, read_size, readOffset);
-        if (nbytes != read_size) {
-            LoadCUReportIOError(tmpFileName, readOffset, nbytes, read_size, size);
+        // 拷贝响应体内容到缓冲区
+        if ((int)res->body.size() != read_size) {
+            ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
+                            errmsg("Downloaded size mismatch: expect %d, got %zu", read_size, res->body.size())));
         }
+
+        memcpy(read_buf, res->body.data(), res->body.size());
+
+        // if (strcmp(tmpFileName, m_fileName) != 0) {
+        //     if (m_fd != FILE_INVALID)
+        //         FileClose(m_fd);
+        //     m_fd = OpenFile(tmpFileName, readFileId, direct_flag);
+
+        //     if (m_fd == FILE_INVALID) {
+        //         ereport(ERROR, (errcode_for_file_access(), errmsg("Could not open file \"%s\"", tmpFileName)));
+        //     }
+
+        //     rc = strcpy_s(m_fileName, MAXPGPATH, tmpFileName);
+        //     securec_check_c(rc, "\0", "\0");
+        // }
+
+        // int nbytes = FilePRead(m_fd, read_buf, read_size, readOffset);
+        // if (nbytes != read_size) {
+        //     LoadCUReportIOError(tmpFileName, readOffset, nbytes, read_size, size);
+        // }
 
         ++readFileId;
         readOffset = 0;
