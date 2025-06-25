@@ -2963,8 +2963,10 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
          * Create unnamed portal to run the query or queries in. If there
          * already is one, silently drop it.
          */
-
-        print(plantree_list);
+        if(query_info->is_user_sql) {
+            printf("user sql plan:\n");
+            print(plantree_list);
+        }
 
         portal = CreatePortal("", true, true);
         /* Don't display the portal in pg_cursors */
