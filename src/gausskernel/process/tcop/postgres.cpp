@@ -18,6 +18,16 @@
  *
  * -------------------------------------------------------------------------
  */
+
+// 取消冲突定义
+#undef RES_DEFAULT
+#undef RES_SINGLE
+#undef RES_TUPLES
+#include "storage/httplib.h"
+#undef RES_DEFAULT
+#undef RES_SINGLE
+#undef RES_TUPLES
+
 #include "postgres.h"
 #include "knl/knl_variable.h"
 #include "catalog/pg_user_status.h"
@@ -2966,6 +2976,39 @@ static void exec_simple_query(const char *query_string, MessageType messageType,
         if(query_info->is_user_sql) {
             printf("user sql plan:\n");
             print(plantree_list);
+            char *s = nodeToString(plantree_list);
+            // 编码查询计划，进行转义等操作
+            std::ostringstream escaped;
+            escaped.fill('0');
+            escaped << std::hex;
+            const char* ptr = s;
+            while (*ptr != '\0') {
+                unsigned char uc = static_cast<unsigned char>(*ptr);
+                // 保留字母数字字符和特殊字符
+                if (isalnum(uc) || uc == '-' || uc == '_' || uc == '.' || uc == '~') {
+                    escaped << static_cast<char>(uc);
+                } else {
+                    // 其他字符转义
+                    escaped << '%' << std::hex << std::uppercase << std::setw(2)
+                            << std::setfill('0') << static_cast<int>(uc);
+                }
+                ptr++;
+            }
+            std::string plan_str = escaped.str();
+
+            ereport(LOG, (errmsg("http client to localhost:8080")));
+            httplib::Client client("localhost:8080");
+            std::stringstream ss;
+            ss << "/plan" << "?plan=" << plan_str;
+            std::string uri = ss.str();
+            printf("user get uri: %s\n", uri);
+            ereport(LOG, (errmsg("send plan uri: %s", uri.c_str())));
+            auto res = client.Get(uri);
+            if (!res || res->status != 200) {
+                ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
+                                errmsg("HTTP GET failed for %s: status=%d", uri.c_str(), res ? res->status : -1)));
+            }
+            continue;
         }
 
         portal = CreatePortal("", true, true);
