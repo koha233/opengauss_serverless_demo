@@ -47,10 +47,13 @@ HTTP服务器用于节点间的通信。
     cmake .. -DENABLE_MULTIPLE_NODES=OFF -DENABLE_THREAD_SAFETY=ON -DENABLE_READLINE=ON -DENABLE_MOT=ON -DENABLE_OPENEULER_MAJOR=ON -DUSE_ONNX=OFF
 
 
-### 启动数据库
+### 启动数据库server
 每个节点都要启动数据库
 
     gs_ctl start -D 数据目录路径 -Z single_node -l logfile
+
+### 创建数据库
+参考openGauss的步骤创建TPC-H数据库，加载数据
 
 ### 执行query
 
