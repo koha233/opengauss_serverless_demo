@@ -5,7 +5,9 @@
 ## rust依赖安装
 
     $ curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
-
+    两个head-only lib:
+    - https://github.com/nlohmann/json 放在：src/include/storage/nlohmann_json.h
+    - https://github.com/yhirose/cpp-httplib，放在：src/include/storage/httplib.h
 ## HTTP服务器配置
 HTTP服务器用于节点间的通信。
 
